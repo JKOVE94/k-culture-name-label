@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#3b2f3a">
+<title>스태프 인쇄 · 이름 라벨</title>
+<style>
+  :root { --ink:#3b2f3a; --sub:#8a7b86; --pink:#f0628f; --mint:#7fd8c3; --yellow:#ffd66b; --cream:#fff6ee; --red:#e5484d; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-family: "Apple SD Gothic Neo", "Hiragino Sans", sans-serif; background: var(--cream); color: var(--ink); }
+  header { background: var(--ink); color: #fff; padding: 14px 16px calc(14px); display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 17px; margin: 0; }
+  .count { font-size: 13px; background: #fff2; border-radius: 999px; padding: 4px 10px; }
+  main { max-width: 480px; margin: 0 auto; padding: 14px; }
+  .card { background: #fff; border: 2px solid var(--ink); border-radius: 18px; padding: 14px; margin-bottom: 12px; box-shadow: 3px 3px 0 var(--ink); }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
+  .dot.on { background: #2bb673; } .dot.busy { background: var(--yellow); }
+  .status { font-weight: 700; flex: 1; }
+  button { font-family: inherit; font-size: 15px; font-weight: 700; border: 2px solid var(--ink); border-radius: 12px; padding: 10px 14px; background: #fff; color: var(--ink); }
+  button.primary { background: var(--pink); color: #fff; }
+  button.mint { background: var(--mint); }
+  button:disabled { opacity: .45; }
+  select { font-size: 15px; padding: 8px; border-radius: 10px; border: 2px solid var(--ink); background: #fff; }
+  .warn { font-size: 13px; color: var(--red); margin-top: 8px; line-height: 1.5; }
+  .video-wrap { position: relative; border-radius: 14px; overflow: hidden; background: #000; aspect-ratio: 1; }
+  video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .frame { position: absolute; inset: 18%; border: 4px solid #fff; border-radius: 18px; box-shadow: 0 0 0 999px #0006; }
+  .scan-msg { text-align: center; font-size: 13px; color: var(--sub); margin-top: 8px; }
+  #label { width: 100%; image-rendering: pixelated; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
+  .big-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .big-actions .primary { grid-column: span 2; font-size: 19px; padding: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chip { font-size: 14px; padding: 6px 11px; border-radius: 999px; border: 2px solid var(--ink); background: #fff; font-weight: 600; }
+  .chip.on { background: var(--yellow); }
+  .meta-title { font-size: 12px; color: var(--sub); margin-top: 12px; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px;
+    border-radius: 999px; font-size: 14px; opacity: 0; transition: .2s; pointer-events: none; white-space: nowrap; }
+  .toast.show { opacity: 1; }
+  details { font-size: 12px; color: var(--sub); }
+  textarea { width: 100%; font-size: 12px; }
+  #log { font-family: ui-monospace, monospace; font-size: 10px; white-space: pre-wrap; max-height: 160px; overflow: auto; }
+</style>
+</head>
+<body>
+<header><h1>🖨 스태프 인쇄</h1><span class="count" id="count">오늘 0장</span></header>
+<main>
+  <!-- 프린터 -->
+  <section class="card">
+    <div class="row">
+      <span class="dot" id="pDot"></span><span class="status" id="pStatus">프린터 연결 안 됨</span>
+      <button id="connect">연결</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <select id="model"><option value="B1_PRO" selected>B1 Pro (300dpi)</option><option value="B1">B1 (203dpi)</option></select>
+      <span style="font-size:13px">진하기</span>
+      <select id="density"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
+      <label style="font-size:13px;display:flex;align-items:center;gap:4px"><input type="checkbox" id="auto" checked> 스캔하면 바로 인쇄</label>
+    </div>
+    <div class="meta-title" id="multiNote">B1 Pro는 iPhone 최대 3대까지 동시에 연결할 수 있어요. 같은 순간에 두 대가 인쇄하지 않도록 해 주세요.</div>
+    <div class="warn" id="btWarn" hidden>이 브라우저는 블루투스를 지원하지 않아요. iPhone에서는 <b>Bluefy</b> 앱으로 이 페이지를 여세요. (스캔·미리보기·PNG 저장은 지금도 됩니다)</div>
+  </section>
+
+  <!-- 스캔 -->
+  <section class="card">
+    <div class="video-wrap" id="videoWrap" hidden><video id="video" playsinline muted></video><div class="frame"></div></div>
+    <div class="row" style="margin-top:10px"><button class="mint" id="scanBtn" style="flex:1">📷 QR 스캔 시작</button></div>
+    <div class="scan-msg" id="scanMsg">방문자 폰의 QR을 비춰 주세요</div>
+  </section>
+
+  <!-- 라벨 -->
+  <section class="card" id="labelCard" hidden>
+    <canvas id="label" width="384" height="240"></canvas>
+    <div class="meta-title">성별 · 연령층 (스태프 판단, 선택)</div>
+    <div class="chips" id="gender"></div>
+    <div class="chips" id="age"></div>
+    <div class="big-actions">
+      <button class="primary" id="printBtn">인쇄하기</button>
+      <button id="pngBtn">PNG 저장</button>
+      <button id="clearBtn">다음 사람</button>
+    </div>
+  </section>
+
+  <details>
+    <summary>테스트 · 기록</summary>
+    <p>QR 대신 데이터를 붙여 넣어 시험할 수 있어요.</p>
+    <textarea id="manual" rows="3">NL1:{"v":1,"b":"다나카 상","s":[["田中","たなか"],["さん"]],"l":"ko","h":"san","id":"test01","t":0}</textarea>
+    <button id="manualBtn">이 데이터로 미리보기</button>
+    <div id="log"></div>
+  </details>
+</main>
+<div class="toast" id="toast"></div>
+
+<script src="./vendor/jsQR.js"></script>
+<script src="./vendor/niimbluelib.min.js"></script>
+<script type="module">
+import { renderLabel, PRINTERS } from './label.mjs';
+let printer = PRINTERS.B1_PRO;
+import { decodePayload } from './payload.mjs';
+
+const $ = id => document.getElementById(id);
+const log = t => { $('log').textContent = `${new Date().toLocaleTimeString()} ${t}\n` + $('log').textContent; };
+document.getElementById('model').onchange = e => { printer = PRINTERS[e.target.value]; if (current) renderLabel(document.getElementById('label'), current, printer); };
+const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 1800); };
+
+// ── 오늘 인쇄 수 (기기 안에만 저장. 서버 동기화는 나중 단계) ──
+const today = new Date().toISOString().slice(0, 10);
+const stats = JSON.parse(localStorage.getItem('nl-stats') || '{}');
+const showCount = () => { $('count').textContent = `오늘 ${stats[today]?.length ?? 0}장`; };
+showCount();
+
+// ── 프린터 (niimbluelib, Web Bluetooth) ──
+const NB = window.niimbluelib;
+let client = null, printing = false;
+const hasBt = !!navigator.bluetooth;
+$('btWarn').hidden = hasBt;
+const setP = (state, text) => { $('pDot').className = 'dot ' + state; $('pStatus').textContent = text; };
+$('connect').onclick = async () => {
+  if (!hasBt) return toast('Bluefy 앱에서 열어 주세요');
+  if (client) { await client.disconnect(); client = null; return; }
+  try {
+    setP('busy', '연결 중…');
+    client = NB.instantiateClient('bluetooth');
+    client.on('disconnect', () => { client = null; setP('', '프린터 연결 끊김'); $('connect').textContent = '연결'; });
+    await client.connect();
+    const meta = client.getModelMetadata();
+    setP('on', `${meta?.model ?? '프린터'} 연결됨`); $('connect').textContent = '끊기';
+    // 연결된 프린터의 해상도·헤드 폭에 맞춰 라벨을 다시 그린다
+    if (meta?.dpi && meta?.printheadPixels) {
+      printer = { name: meta.model, dpi: meta.dpi, headPx: meta.printheadPixels };
+      if (PRINTERS[meta.model]) $('model').value = meta.model;
+      if (current) renderLabel($('label'), current, printer);
+    }
+    log(`connected ${meta?.model} dir=${meta?.printDirection}`);
+  } catch (e) { client = null; setP('', '연결 실패'); log('connect error ' + e); toast('연결 실패: ' + e.message); }
+};
+
+async function printLabel() {
+  if (!client) { toast('먼저 프린터를 연결하세요'); return false; }
+  if (printing) return false;
+  printing = true; $('printBtn').disabled = true; $('printBtn').textContent = '인쇄 중…';
+  const meta = client.getModelMetadata();
+  const color = NB.PageColorType.SingleColor;
+  const encoded = NB.ImageEncoder.encodeCanvas($('label'), color, meta?.printDirection ?? 'top');
+  const task = client.protocol.newPrintTask(client.getPrintTaskType() ?? 'B1', {
+    totalPages: 1, statusPollIntervalMs: 100, statusTimeoutMs: 8000, pageColor: color, density: Number($('density').value),
+  });
+  try {
+    await task.printInit(); await task.printPage(encoded, 1);
+    await task.waitForPageFinished(); await task.waitForFinished();
+    record(); toast('인쇄 완료 ✅'); return true;
+  } catch (e) { log('print error ' + e); toast('인쇄 실패: ' + e.message); return false; }
+  finally { await task.printEnd().catch(() => {}); printing = false; $('printBtn').disabled = false; $('printBtn').textContent = '인쇄하기'; }
+}
+
+// ── 현재 라벨 + 스태프 입력 ──
+let current = null;
+const seen = new Set();
+const GENDER = [['m', '남'], ['f', '여']];
+const AGE = [['child', '어린이'], ['10s', '10대'], ['20s', '20대'], ['30s', '30대'], ['40s', '40대'], ['50s', '50대'], ['60p', '60대+']];
+const chipRow = (el, items, key) => {
+  el.innerHTML = items.map(([id, t]) => `<button class="chip" data-id="${id}">${t}</button>`).join('');
+  el.onclick = e => {
+    const id = e.target.dataset?.id; if (!id || !current) return;
+    current[key] = current[key] === id ? 'unset' : id;
+    [...el.children].forEach(b => b.classList.toggle('on', b.dataset.id === current[key]));
+    if (current.recorded) saveStats();   // 인쇄 뒤에 눌러도 방금 건에 반영
+  };
+};
+chipRow($('gender'), GENDER, 'gender'); chipRow($('age'), AGE, 'age');
+
+function show(p) {
+  current = { ...p, gender: 'unset', age: 'unset', recorded: false };
+  renderLabel($('label'), p, printer);
+  $('labelCard').hidden = false;
+  document.querySelectorAll('.chip.on').forEach(b => b.classList.remove('on'));
+  $('labelCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function record() {
+  if (!current) return;
+  (stats[today] ??= []).push({ at: Date.now(), reprint: current.recorded, gender: current.gender, age: current.age });
+  current.recorded = true; current.idx = stats[today].length - 1;
+  saveStats();
+}
+function saveStats() {
+  if (current?.idx != null) Object.assign(stats[today][current.idx], { gender: current.gender, age: current.age });
+  localStorage.setItem('nl-stats', JSON.stringify(stats)); showCount();
+}
+
+async function handle(text) {
+  let p;
+  try { p = decodePayload(text); } catch (e) { toast(e.message); return; }
+  if (seen.has(p.id)) toast('이미 스캔한 QR이에요 (재인쇄는 버튼으로)');
+  seen.add(p.id);
+  show(p);
+  log(`scanned ${p.big}`);
+  if ($('auto').checked && client && !seen.has('printed:' + p.id)) { if (await printLabel()) seen.add('printed:' + p.id); }
+}
+
+// ── QR 스캔 (jsQR) ──
+let stream = null, raf = 0;
+const work = document.createElement('canvas'), wctx = work.getContext('2d', { willReadFrequently: true });
+$('scanBtn').onclick = async () => {
+  if (stream) return stopScan();
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    $('video').srcObject = stream; await $('video').play();
+    $('videoWrap').hidden = false; $('scanBtn').textContent = '⏹ 스캔 멈추기';
+    let last = 0;
+    const tick = t => {
+      raf = requestAnimationFrame(tick);
+      if (t - last < 120) return; last = t;           // 초당 약 8번만 검사 (배터리 절약)
+      const v = $('video'); if (!v.videoWidth) return;
+      const s = Math.min(v.videoWidth, v.videoHeight, 640);
+      work.width = work.height = s;
+      wctx.drawImage(v, (v.videoWidth - s) / 2, (v.videoHeight - s) / 2, s, s, 0, 0, s, s);
+      const code = window.jsQR(wctx.getImageData(0, 0, s, s).data, s, s, { inversionAttempts: 'dontInvert' });
+      if (code) {
+        const text = new TextDecoder().decode(new Uint8Array(code.binaryData));
+        if (text !== handle.last || t - handle.at > 3000) { handle.last = text; handle.at = t; navigator.vibrate?.(60); handle(text); }
+      }
+    };
+    raf = requestAnimationFrame(tick);
+  } catch (e) { toast('카메라를 열 수 없어요: ' + e.message); log('camera ' + e); }
+};
+function stopScan() {
+  cancelAnimationFrame(raf); stream?.getTracks().forEach(t => t.stop()); stream = null;
+  $('videoWrap').hidden = true; $('scanBtn').textContent = '📷 QR 스캔 시작';
+}
+
+$('printBtn').onclick = () => printLabel();
+$('pngBtn').onclick = () => { const a = document.createElement('a'); a.href = $('label').toDataURL('image/png'); a.download = 'label.png'; a.click(); };
+$('clearBtn').onclick = () => { current = null; $('labelCard').hidden = true; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+$('manualBtn').onclick = () => handle($('manual').value.trim());
+</script>
+</body>
+</html>

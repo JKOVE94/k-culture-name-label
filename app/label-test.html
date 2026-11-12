@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>라벨 흑백 미리보기</title>
+<style>
+  body { margin: 8px; background: #eee; font-family: sans-serif; }
+  .grid { display: grid; grid-template-columns: repeat(2, 284px); gap: 8px; }
+  canvas { background: #fff; image-rendering: pixelated; }
+</style></head>
+<body>
+<div class="grid" id="g"></div>
+<script type="module">
+import { renderLabel, PRINTERS } from './label.mjs';
+const samples = [
+  { big: '다나카 상', segs: [{ text: '田中', rt: 'たなか' }, { text: 'さん' }] },
+  { big: '하루토 군', segs: [{ text: '大翔', rt: 'はると' }, { text: 'くん' }] },
+  { big: '사쿠라 짱', segs: [{ text: 'さくら' }, { text: 'ちゃん' }] },
+  { big: 'キム・ミンジュンさん', segs: [{ text: '김민준' }], bigLang: 'ja' },
+];
+await document.fonts.ready;
+// B1 Pro(567×354)를 화면에서는 절반 크기로 표시
+for (const s of samples) { const c = document.createElement('canvas'); c.style.width = '284px'; document.getElementById('g').append(c); renderLabel(c, s, PRINTERS.B1_PRO); }
+</script>
+</body></html>

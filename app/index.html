@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#fff6ee">
+<title>K-CULTURE 体験ブース｜ハングルネーム</title>
+<style>
+  :root {
+    --cream: #fff6ee; --ink: #3b2f3a; --sub: #8a7b86;
+    --pink: #ff8fb1; --pink-d: #f0628f; --pink-l: #ffe3ec;
+    --mint: #7fd8c3; --mint-l: #e2f7f1;
+    --yellow: #ffd66b; --yellow-l: #fff4d1;
+    --sky: #8ec5ff; --lav: #c3a6ff;
+    --round: "Hiragino Maru Gothic ProN", "Hiragino Maru Gothic Pro", "Apple SD Gothic Neo", "Hiragino Sans", sans-serif;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--cream); color: var(--ink); font-family: var(--round); }
+  body {
+    background-image: radial-gradient(#ffd9e4 1.2px, transparent 1.2px);
+    background-size: 18px 18px; min-height: 100vh; overflow-x: hidden; position: relative;
+  }
+
+  /* 색동 줄무늬 (한복 소매의 오색 줄) */
+  .saekdong { height: 10px; background: linear-gradient(90deg,
+    #ff6f91 0 20%, #ffc75f 20% 40%, #7fd8c3 40% 60%, #8ec5ff 60% 80%, #c3a6ff 80% 100%); }
+
+  /* 떠다니는 한글 자모 장식 */
+  .floaties { position: absolute; left: 0; right: 0; top: 0; height: 100%; pointer-events: none; z-index: 0; overflow: hidden; }
+  .floaties span { position: absolute; font-weight: 800; opacity: .18; animation: float 7s ease-in-out infinite; }
+  @keyframes float { 0%,100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-14px) rotate(6deg); } }
+  @media (prefers-reduced-motion: reduce) { .floaties span { animation: none; } }
+
+  main { position: relative; z-index: 1; max-width: 480px; margin: 0 auto; padding: 18px 18px 48px; }
+
+  .badge { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 2px solid var(--ink);
+    border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 800; letter-spacing: 1px; box-shadow: 2px 2px 0 var(--ink); }
+  .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pink); }
+  h1 { font-size: 26px; line-height: 1.35; margin: 14px 0 4px; }
+  h1 .hl { background: linear-gradient(transparent 60%, var(--yellow) 60%); padding: 0 2px; }
+  .lead { color: var(--sub); font-size: 14px; margin: 0 0 18px; line-height: 1.6; }
+
+  /* 단계 카드 */
+  .step { background: #fff; border: 2px solid var(--ink); border-radius: 22px; padding: 16px; margin-top: 14px;
+    box-shadow: 4px 4px 0 var(--ink); }
+  .step-head { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 800; margin-bottom: 10px; }
+  .num { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; color: #fff; border: 2px solid var(--ink); }
+  .num.n1 { background: var(--pink); } .num.n2 { background: var(--mint); } .num.n3 { background: var(--sky); }
+  .step-head small { font-weight: 400; color: var(--sub); font-size: 12px; }
+
+  .input-wrap { position: relative; }
+  .input-wrap::before { content: "✏️"; position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 20px; }
+  #name { width: 100%; font-family: var(--round); font-size: 24px; padding: 14px 14px 14px 46px; border: 2px dashed var(--pink);
+    border-radius: 16px; outline: none; background: var(--pink-l); color: var(--ink); }
+  #name:focus { border-style: solid; background: #fff; box-shadow: 0 0 0 4px #ffd0de; }
+  #name::placeholder { color: #d7a5b6; }
+  .tip { font-size: 12px; color: var(--sub); margin-top: 8px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { font-family: var(--round); font-size: 16px; padding: 9px 15px; border-radius: 999px; border: 2px solid var(--ink);
+    background: #fff; color: var(--ink); box-shadow: 2px 2px 0 var(--ink); transition: transform .08s; }
+  .chip:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--ink); }
+  .chip.on { background: var(--yellow); }
+  .chip.on::before { content: "♥ "; color: var(--pink-d); }
+  .chip.ghost { border-style: dashed; box-shadow: none; color: var(--sub); background: transparent; }
+  #yomiStep .chip.on { background: var(--mint-l); }
+  #yomiStep .chip.on::before { content: "✓ "; color: #2aa889; }
+  .yomi-head { font-size: 14px; margin: 4px 0 6px; color: var(--sub); }
+  .yomi-block + .yomi-block { margin-top: 10px; }
+
+  /* 결과: 이름 스티커 */
+  .sticker-area { margin-top: 22px; text-align: center; }
+  .speech { display: inline-block; position: relative; background: var(--ink); color: #fff; font-size: 13px; padding: 6px 14px;
+    border-radius: 999px; margin-bottom: 12px; }
+  .speech::after { content: ""; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%);
+    border: 6px solid transparent; border-top-color: var(--ink); border-bottom: 0; }
+  .sticker { position: relative; background: #fff; border: 3px solid var(--ink); border-radius: 26px; padding: 22px 16px 18px;
+    box-shadow: 6px 6px 0 var(--pink); overflow: hidden; }
+  .sticker::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 8px; background: linear-gradient(90deg,
+    #ff6f91 0 20%, #ffc75f 20% 40%, #7fd8c3 40% 60%, #8ec5ff 60% 80%, #c3a6ff 80% 100%); }
+  .corner { position: absolute; font-size: 20px; }
+  .corner.tl { left: 14px; top: 20px; } .corner.br { right: 14px; bottom: 14px; }
+  .hello { font-size: 13px; color: var(--pink-d); font-weight: 800; letter-spacing: 1px; }
+  .big { font-size: 40px; font-weight: 800; letter-spacing: 2px; margin: 4px 0 2px; min-height: 52px; font-family: "Apple SD Gothic Neo", var(--round); }
+  .small { font-size: 18px; min-height: 28px; line-height: 2.2; margin-top: 4px; }
+  ruby rt { font-size: 11px; color: var(--sub); padding-bottom: 3px; }
+  .tiles { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; margin-top: 14px; min-height: 10px; }
+  .tile { width: 52px; border: 2px solid var(--ink); border-radius: 12px; padding: 6px 0 4px; background: var(--yellow-l); }
+  .tile:nth-child(3n+2) { background: var(--mint-l); } .tile:nth-child(3n) { background: var(--pink-l); }
+  .tile b { display: block; font-size: 22px; font-family: "Apple SD Gothic Neo", var(--round); }
+  .tile i { display: block; font-style: normal; font-size: 11px; color: var(--sub); }
+  .empty { color: var(--sub); font-size: 13px; padding: 10px 0; }
+  .empty .bubble { font-size: 34px; display: block; margin-bottom: 6px; }
+
+  .cta { display: block; width: 100%; margin-top: 22px; font-family: var(--round); font-size: 19px; font-weight: 800; color: #fff;
+    background: var(--pink-d); border: 3px solid var(--ink); border-radius: 18px; padding: 16px; box-shadow: 4px 4px 0 var(--ink); }
+  .cta:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--ink); }
+  .cta:disabled { background: #e8cfd8; color: #fff; }
+
+  .done-bg { position: fixed; inset: 0; background: rgba(59,47,58,.45); display: none; align-items: flex-end; justify-content: center; z-index: 15; }
+  .done-bg.open { display: flex; }
+  .done { width: 100%; max-width: 480px; max-height: 94vh; overflow-y: auto; background: var(--cream); border: 3px solid var(--ink); border-bottom: 0;
+    border-radius: 28px 28px 0 0; padding: 22px 20px calc(22px + env(safe-area-inset-bottom)); text-align: center; }
+  .done-title { font-size: 28px; font-weight: 800; }
+  .done-sub { font-size: 15px; margin: 6px 0 14px; }
+  .done-sub b { background: linear-gradient(transparent 60%, var(--yellow) 60%); }
+  .qr-box { display: inline-block; background: #fff; border: 3px solid var(--ink); border-radius: 22px; padding: 14px; box-shadow: 5px 5px 0 var(--mint); }
+  #qr { display: block; width: 220px; height: 220px; image-rendering: pixelated; }
+  .done-note { font-size: 14px; color: var(--sub); margin-top: 16px; }
+  .cta.save { background: var(--mint); color: var(--ink); margin-top: 18px; font-size: 17px; }
+  .back { margin-top: 12px; font-family: var(--round); font-size: 15px; border: 0; background: none; color: var(--sub); padding: 8px; }
+  #cardImg { width: 100%; border-radius: 16px; border: 2px solid var(--ink); }
+  .foot { text-align: center; font-size: 11px; color: var(--sub); margin-top: 22px; }
+
+  /* 시트 */
+  .sheet-bg { position: fixed; inset: 0; background: rgba(59,47,58,.4); display: none; align-items: flex-end; justify-content: center; z-index: 10; }
+  .sheet-bg.open { display: flex; }
+  .sheet { width: 100%; max-width: 480px; background: var(--cream); border: 3px solid var(--ink); border-bottom: 0; border-radius: 26px 26px 0 0;
+    padding: 20px 20px calc(22px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size: 17px; margin: 0 0 12px; }
+  #yomiInput { width: 100%; font-family: var(--round); font-size: 22px; padding: 12px 14px; border: 2px solid var(--mint);
+    border-radius: 14px; outline: none; background: #fff; }
+  .actions { display: flex; gap: 10px; margin-top: 14px; }
+  .actions button { flex: 1; font-family: var(--round); font-size: 16px; font-weight: 800; padding: 12px; border-radius: 14px;
+    border: 2px solid var(--ink); background: #fff; box-shadow: 2px 2px 0 var(--ink); }
+  .actions .primary { background: var(--mint); }
+
+  .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px); background: var(--ink); color: #fff;
+    font-size: 14px; padding: 10px 16px; border-radius: 999px; opacity: 0; transition: .25s; z-index: 20; white-space: nowrap; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  details { margin-top: 18px; font-size: 11px; color: var(--sub); }
+  #log { font-family: ui-monospace, monospace; font-size: 10px; white-space: pre-wrap; background: #fff; padding: 8px; max-height: 200px; overflow: auto; border-radius: 8px; }
+  .linkbtn { font-size: 11px; border: 0; background: none; color: var(--pink-d); padding: 4px 0; }
+</style>
+</head>
+<body>
+<div class="saekdong"></div>
+<div class="floaties" aria-hidden="true">
+  <span style="left:6%;top:12%;font-size:42px;color:#ff6f91">ㅎ</span>
+  <span style="left:82%;top:9%;font-size:36px;color:#7fd8c3;animation-delay:-2s">ㄱ</span>
+  <span style="left:88%;top:44%;font-size:48px;color:#8ec5ff;animation-delay:-4s">한</span>
+  <span style="left:3%;top:52%;font-size:40px;color:#ffc75f;animation-delay:-1s">ㅏ</span>
+  <span style="left:12%;top:86%;font-size:46px;color:#c3a6ff;animation-delay:-3s">글</span>
+  <span style="left:80%;top:82%;font-size:34px;color:#ff6f91;animation-delay:-5s">ㅇ</span>
+</div>
+
+<main>
+  <span class="badge"><span class="dot"></span>K-CULTURE 体験ブース</span>
+  <h1>あなたの名前を<br><span class="hl">ハングル</span>で書いてみよう！</h1>
+  <p class="lead">韓国の文字「ハングル」で、あなただけのネームシールを作ります 🇰🇷✨</p>
+
+  <section class="step">
+    <div class="step-head"><span class="num n1">1</span>呼ばれたい名前 <small>苗字だけ・下の名前だけでもOK</small></div>
+    <div class="input-wrap">
+      <input id="name" lang="ja" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="田中・さくら・タナカ">
+    </div>
+    <div class="tip">漢字・ひらがな・カタカナ、どれでも大丈夫です</div>
+  </section>
+
+  <section class="step" id="yomiStep" hidden>
+    <div class="step-head"><span class="num n2">2</span>読み方はどれ？ <small>ちがったら「その他」</small></div>
+    <div id="yomi"></div>
+  </section>
+
+  <section class="step">
+    <div class="step-head"><span class="num n3" id="honNum">2</span>どう呼ばれたい？</div>
+    <div class="chips" id="hon"></div>
+  </section>
+
+  <div class="sticker-area">
+    <div class="speech">韓国語だと、こうなります！</div>
+    <div class="sticker">
+      <span class="corner tl">🌸</span><span class="corner br">💖</span>
+      <div id="filled" hidden>
+        <div class="hello">안녕하세요!</div>
+        <div class="big" id="big"></div>
+        <div class="small" id="small"></div>
+        <div class="tiles" id="tiles"></div>
+      </div>
+      <div class="empty" id="empty"><span class="bubble">🫧</span>名前を入れると、ここにハングルが出てきます</div>
+    </div>
+  </div>
+
+  <button class="cta" id="cta" disabled>できた！ QRコードを作る 📱</button>
+  <div class="foot">入力した名前は保存されません 🔒</div>
+
+  <details>
+    <summary>デバッグ</summary>
+    <button class="linkbtn" id="copy">기록 복사</button>
+    <div id="log"></div>
+  </details>
+</main>
+
+<div class="sheet-bg" id="sheetBg">
+  <div class="sheet">
+    <h2 id="sheetTitle">読み方をひらがなで</h2>
+    <input id="yomiInput" lang="ja" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="たなか">
+    <div class="actions">
+      <button id="sheetCancel">やめる</button>
+      <button id="sheetOk" class="primary">これにする！</button>
+    </div>
+  </div>
+</div>
+<!-- 완료 창: QR + 인쇄될 흑백 라벨 + 컨러 카드 저장 -->
+<div class="done-bg" id="doneBg">
+  <div class="done">
+    <div class="done-title">できた！🎉</div>
+    <div class="done-sub">このQRを <b>スタッフ</b> に見せてね 👀</div>
+    <div class="qr-box"><canvas id="qr"></canvas></div>
+    <div class="done-note">スタッフがあなたの名前シールを印刷します 🎀</div>
+    <button class="cta save" id="saveCard">📥 名前カードをスマホに保存</button>
+    <button class="back" id="doneBack">← もどって直す</button>
+  </div>
+</div>
+<!-- 저장 대체: 길게 눌러 저장 -->
+<div class="done-bg" id="imgBg">
+  <div class="done">
+    <div class="done-sub">画像を <b>長押し</b> して「写真に保存」してね 📸</div>
+    <img id="cardImg" alt="名前カード">
+    <button class="back" id="imgBack">閉じる</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { hiraganaToHangul, hangulToKatakana } from './convert.mjs';
+import { createReader } from './reading.mjs';
+import { splitKorean } from './input.mjs';
+import { renderKeepsake, saveCanvas } from './keepsake.mjs';
+import { encodePayload } from './payload.mjs';
+import qrcode from './vendor/qrcode.mjs';
+qrcode.stringToBytes = s => Array.from(new TextEncoder().encode(s));   // 한글·일본어를 UTF-8로
+
+const $ = id => document.getElementById(id);
+const nameEl = $('name'), logEl = $('log');
+const KANA = /^[\u3041-\u309f\u30a1-\u30ff\u30fc]+$/;
+const HANGUL = /^[\uac00-\ud7a3\s\u3000]+$/;
+const KANJI_CH = /[\u4e00-\u9fff\u3400-\u4dbf々]/;
+const RUNS = /[\u4e00-\u9fff\u3400-\u4dbf々]+|[\u3041-\u309f\u30a1-\u30ff\u30fc]+|[\s\u3000]+|[^\s\u3000\u3041-\u309f\u30a1-\u30ff\u30fc\u4e00-\u9fff\u3400-\u4dbf々]+/g;
+const toHira = s => s.replace(/[\u30a1-\u30f6]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const log = (t, d) => { logEl.textContent = `${(performance.now() / 1000).toFixed(2)} ${t.padEnd(26)} data=${JSON.stringify(d)} value=${JSON.stringify(nameEl.value)}\n` + logEl.textContent; };
+
+// 한글 음절 → 로마자 (타일 아래 작은 발음 표시용, 개정 로마자 간이판)
+const RC = ['g','kk','n','d','tt','r','m','b','pp','s','ss','','j','jj','ch','k','t','p','h'];
+const RV = ['a','ae','ya','yae','eo','e','yeo','ye','o','wa','wae','oe','yo','u','wo','we','wi','yu','eu','ui','i'];
+const RF = ['','k','k','k','n','n','n','t','l','k','m','l','l','l','p','l','m','p','p','t','t','ng','t','t','k','t','p','t'];
+const roman = ch => { const c = ch.charCodeAt(0) - 0xac00; if (c < 0 || c > 11171) return ''; return RC[Math.floor(c / 588)] + RV[Math.floor((c % 588) / 28)] + RF[c % 28]; };
+
+// ── 사전 ──
+const shardCache = new Map();
+const loadShard = ch => {
+  if (!shardCache.has(ch)) shardCache.set(ch, fetch(`./dict/shard/${ch.codePointAt(0).toString(16)}.json`).then(r => r.ok ? r.json() : { s: {}, g: {} }).catch(() => ({ s: {}, g: {} })));
+  return shardCache.get(ch);
+};
+let candidatesFor;
+fetch('./dict/kanji.json').then(r => r.json()).then(kanji => { candidatesFor = createReader({ loadShard, kanji }); refresh(); });
+
+// ── 키보드 조합 힌트 ──
+const hints = new Map();
+let compStart = 0, lastKana = '';
+const peek = d => {
+  const fromValue = nameEl.value.slice(compStart).replace(/[a-zA-Z]+$/, '');
+  const fromData = (d ?? '').replace(/[a-zA-Z]+$/, '');
+  for (const s of [fromValue, fromData]) if (s && KANA.test(s) && s.length >= lastKana.length) lastKana = s;
+};
+nameEl.addEventListener('compositionstart', e => { compStart = nameEl.selectionStart ?? nameEl.value.length; lastKana = ''; log('compositionstart', e.data); });
+nameEl.addEventListener('compositionupdate', e => { peek(e.data); setTimeout(() => peek(null), 0); log('compositionupdate', e.data); });
+nameEl.addEventListener('input', e => { log(`input(${e.inputType},${e.isComposing ? 'C' : '-'})`, e.data); if (e.isComposing) peek(e.data); setTimeout(refresh, 0); });
+nameEl.addEventListener('compositionend', e => {
+  log('compositionend', e.data);
+  const hint = toHira(lastKana);
+  setTimeout(() => {
+    const run = (nameEl.value.slice(compStart).match(/^[\u4e00-\u9fff\u3400-\u4dbf々]+/) ?? [''])[0];
+    if (run && hint) hints.set(run, hint);
+    log('commit', { run, hint });
+    refresh();
+  }, 30);
+});
+function hintFor(run) {
+  if (hints.has(run)) return { hint: hints.get(run), hintDisplay: hints.get(run) };
+  const parts = []; let rest = run;
+  while (rest) {
+    const key = [...hints.keys()].filter(k => rest.startsWith(k)).sort((a, b) => b.length - a.length)[0];
+    if (!key) return { hint: '', hintDisplay: '' };
+    parts.push(hints.get(key)); rest = rest.slice(key.length);
+  }
+  return { hint: parts.join(''), hintDisplay: parts.join(' ') };
+}
+
+// ── 입력값 → 결과 ──
+const choice = new Map();
+let runsInfo = [], mode = 'empty';   // 'ja' | 'ko' | 'empty'
+async function refresh() {
+  const v = nameEl.value;
+  if (!v.trim()) { hints.clear(); choice.clear(); runsInfo = []; mode = 'empty'; return render(); }
+  if (HANGUL.test(v)) { mode = 'ko'; runsInfo = []; return render(); }
+  const info = [];
+  for (const run of v.match(RUNS) ?? []) {
+    if (KANA.test(run)) info.push({ run, type: 'kana', reading: toHira(run) });
+    else if (/^[\s\u3000]+$/.test(run)) info.push({ run, type: 'space', reading: ' ' });
+    else if (KANJI_CH.test(run[0])) {
+      const { hint, hintDisplay } = hintFor(run);
+      const cands = candidatesFor ? await candidatesFor(run, hint, hintDisplay) : [];
+      info.push({ run, type: 'kanji', cands, reading: choice.get(run) ?? cands[0]?.reading ?? hint });
+    } else info.push({ run, type: 'other', reading: '' });
+  }
+  if (nameEl.value !== v) return;
+  runsInfo = info; mode = 'ja';
+  render();
+}
+
+const HON = [['san','さん','상'],['kun','くん','군'],['chan','ちゃん','짱'],['none','名前だけ','']];
+let hon = 'san';
+$('hon').innerHTML = HON.map(([id, ja]) => `<button class="chip" data-id="${id}">${ja}</button>`).join('');
+$('hon').onclick = e => { const id = e.target.closest('button')?.dataset.id; if (id) { hon = id; render(); } };
+
+function render() {
+  for (const b of $('hon').children) b.classList.toggle('on', b.dataset.id === hon);
+  const [, ja, ko] = HON.find(h => h[0] === hon);
+
+  // 읽기 단계
+  const kanjiRuns = runsInfo.filter(i => i.type === 'kanji');
+  $('yomiStep').hidden = !kanjiRuns.length;
+  $('honNum').textContent = kanjiRuns.length ? '3' : '2';
+  $('yomi').innerHTML = kanjiRuns.map(i => {
+    const top = i.cands.slice(0, 3).map(c => c.reading);
+    if (i.reading && !top.includes(i.reading)) top.unshift(i.reading);
+    const chips = top.map(r => `<button class="chip ${r === i.reading ? 'on' : ''}" data-run="${esc(i.run)}" data-r="${esc(r)}">${esc(r)}</button>`).join('');
+    const head = kanjiRuns.length > 1 ? `<div class="yomi-head">「${esc(i.run)}」</div>` : '';
+    return `<div class="yomi-block">${head}<div class="chips">${chips}<button class="chip ghost" data-run="${esc(i.run)}" data-other="1">その他 ✍️</button></div></div>`;
+  }).join('');
+
+  // 스티커
+  let big = '', smallHtml = '', tileText = '';
+  if (mode === 'ja') {
+    const reading = runsInfo.map(i => i.reading).join('').replace(/\s+/g, ' ').trim();
+    const koName = reading ? reading.split(' ').map(t => hiraganaToHangul(t)).join(' ') : '';
+    if (koName) {
+      big = `${koName}${ko ? ' ' + ko : ''}`;
+      tileText = koName;
+      smallHtml = runsInfo.map(i => i.type === 'kanji' && i.reading ? `<ruby>${esc(i.run)}<rt>${esc(i.reading)}</rt></ruby>` : esc(i.run)).join('') + ja;
+    }
+  } else if (mode === 'ko') {
+    const parts = nameEl.value.trim().split(/[\s\u3000]+/).flatMap(splitKorean);
+    big = parts.map(p => hangulToKatakana(p.text)).join('・') + ja;
+    smallHtml = esc(nameEl.value.trim());
+    tileText = nameEl.value.trim();
+  }
+  $('filled').hidden = !big; $('empty').hidden = !!big;
+  $('big').textContent = big;
+  $('small').innerHTML = smallHtml;
+  $('tiles').innerHTML = [...tileText].filter(c => c.trim()).map(c => `<span class="tile"><b>${esc(c)}</b><i>${roman(c)}</i></span>`).join('');
+  $('cta').disabled = !big;
+
+  // 완료 창에서 쓸 현재 결과
+  ticket = !big ? null : {
+    big, hon, tilesText: tileText, bigLang: mode === 'ko' ? 'ja' : 'ko',
+    segs: mode === 'ja'
+      ? [...runsInfo.filter(i => i.run.trim()).map(i => i.type === 'kanji' ? { text: i.run, rt: i.reading } : { text: i.run }), ...(ja ? [{ text: ja }] : [])]
+      : [{ text: nameEl.value.trim() }],
+  };
+}
+let ticket = null;
+
+// ── 완료 창 ──
+function drawQr(canvas, text) {
+  const qr = qrcode(0, 'M'); qr.addData(text, 'Byte'); qr.make();
+  const n = qr.getModuleCount(), cell = 8, quiet = 2, size = (n + quiet * 2) * cell;
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size); ctx.fillStyle = '#000';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) ctx.fillRect((c + quiet) * cell, (r + quiet) * cell, cell, cell);
+}
+function openDone() {
+  if (!ticket) return;
+  drawQr($('qr'), encodePayload(ticket));
+  $('doneBg').classList.add('open');
+}
+$('doneBack').onclick = () => $('doneBg').classList.remove('open');
+$('imgBack').onclick = () => $('imgBg').classList.remove('open');
+$('saveCard').onclick = async () => {
+  const c = renderKeepsake(document.createElement('canvas'), ticket);
+  const r = await saveCanvas(c, 'hangul-name.png', url => { $('cardImg').src = url; $('imgBg').classList.add('open'); });
+  if (r === 'shared' || r === 'download') toast('保存できました！💖');
+};
+
+$('yomi').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.other) return openSheet(b.dataset.run);
+  choice.set(b.dataset.run, b.dataset.r); refresh();
+};
+let sheetRun = '';
+function openSheet(run) {
+  sheetRun = run;
+  $('sheetTitle').textContent = `「${run}」の読み方をひらがなで ✍️`;
+  $('yomiInput').value = runsInfo.find(i => i.run === run)?.reading ?? '';
+  $('sheetBg').classList.add('open');
+  setTimeout(() => $('yomiInput').focus(), 50);
+}
+const closeSheet = () => $('sheetBg').classList.remove('open');
+$('sheetCancel').onclick = closeSheet;
+$('sheetBg').onclick = e => { if (e.target === $('sheetBg')) closeSheet(); };
+$('sheetOk').onclick = () => { const r = toHira($('yomiInput').value.trim()); if (r) choice.set(sheetRun, r); closeSheet(); refresh(); };
+
+const toast = msg => { const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1800); };
+$('cta').onclick = openDone;
+$('copy').onclick = () => navigator.clipboard?.writeText(logEl.textContent);
+// 테스트용: ?q=田中 로 열면 미리 입력
+const q = new URLSearchParams(location.search).get('q');
+if (q) { nameEl.value = q; refresh(); }
+render();
+</script>
+</body>
+</html>

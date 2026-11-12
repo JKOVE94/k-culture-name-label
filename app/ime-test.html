@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IME 읽기 캡처 테스트</title>
+<style>
+  body { font-family: -apple-system, "Hiragino Sans", "Apple SD Gothic Neo", sans-serif; margin: 16px; max-width: 560px; }
+  h1 { font-size: 18px; }
+  input { font-size: 22px; width: 100%; box-sizing: border-box; padding: 10px; }
+  .pairs div { font-size: 20px; padding: 6px 0; border-bottom: 1px solid #eee; }
+  .muted { color: #888; font-size: 13px; }
+  #log { font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; background: #f6f6f6; padding: 8px; max-height: 260px; overflow: auto; }
+  button { font-size: 15px; padding: 6px 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<h1>한자 변환 전 히라가나 캡처 테스트</h1>
+<p class="muted">iPhone 일본어 키보드(かな 또는 ローマ字)로 이름을 입력하고 한자로 변환해 보세요. 예: たなか → 田中</p>
+<input id="name" lang="ja" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="呼ばれたい名前">
+<button id="reset">지우기</button>
+
+<h2 style="font-size:16px">잡아낸 읽기 (변환 전 → 확정)</h2>
+<div class="pairs" id="pairs"></div>
+
+<h2 style="font-size:16px">이벤트 기록</h2>
+<div id="log"></div>
+
+<script type="module">
+import { hiraganaToHangul } from './convert.mjs';
+
+const $ = id => document.getElementById(id);
+const input = $('name'), pairsEl = $('pairs'), logEl = $('log');
+const KANA = /^[\u3041-\u309f\u30a1-\u30ff\u30fc]+$/;
+const KANJI = /[\u4e00-\u9fff\u3400-\u4dbf々]/;
+const toHira = s => s.replace(/[\u30a1-\u30f6]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+
+let kanaSnap = '';     // 이번 변환에서 마지막으로 본 "가나만 있는" 조합 문자열
+const pairs = [];      // [{ kana, committed }]
+
+const log = (type, data) => {
+  logEl.textContent = `${type.padEnd(18)} data=${JSON.stringify(data)}  value=${JSON.stringify(input.value)}\n` + logEl.textContent;
+};
+
+// 로마자 키보드는 조합 중에 "たn" 처럼 끝에 알파벳이 붙으므로 떼고 판단
+const snapshot = data => {
+  if (!data) return;
+  const s = data.replace(/[a-zA-Z]+$/, '');
+  if (s && KANA.test(s)) kanaSnap = s;
+};
+
+input.addEventListener('compositionstart', e => { kanaSnap = ''; log('compositionstart', e.data); });
+input.addEventListener('compositionupdate', e => { snapshot(e.data); log('compositionupdate', e.data); });
+// 일부 브라우저는 compositionupdate가 빈약해서 input 이벤트로도 보조 수집
+input.addEventListener('input', e => {
+  if (e.isComposing || e.inputType === 'insertCompositionText') snapshot(e.data);
+  log(`input(${e.inputType})`, e.data);
+});
+input.addEventListener('compositionend', e => {
+  log('compositionend', e.data);
+  const committed = e.data ?? '';
+  if (committed && KANJI.test(committed) && kanaSnap) {
+    pairs.push({ kana: toHira(kanaSnap), committed });
+    render();
+  }
+  kanaSnap = '';
+});
+
+function render() {
+  pairsEl.innerHTML = pairs.map(p =>
+    `<div>${p.kana} → <b>${p.committed}</b> <span class="muted">(한글: ${hiraganaToHangul(p.kana)})</span></div>`
+  ).join('') || '<div class="muted">아직 없음</div>';
+}
+$('reset').onclick = () => { input.value = ''; pairs.length = 0; logEl.textContent = ''; render(); input.focus(); };
+render();
+</script>
+</body>
+</html>

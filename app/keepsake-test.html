@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>컬러 이름카드 미리보기</title>
+<style>body{margin:0;background:#ddd;display:flex;gap:8px;padding:6px}img{height:380px;border-radius:8px}</style></head>
+<body>
+<script type="module">
+import { renderKeepsake } from './keepsake.mjs';
+await document.fonts.ready;
+for (const t of [
+  { big: '다나카 상', segs: [{ text: '田中', rt: 'たなか' }, { text: 'さん' }], tilesText: '다나카' },
+  { big: '하루토 군', segs: [{ text: '大翔', rt: 'はると' }, { text: 'くん' }], tilesText: '하루토' },
+  { big: 'キム・ミンジュンさん', segs: [{ text: '김민준' }], bigLang: 'ja', tilesText: '김민준' },
+]) { const img = new Image(); img.src = renderKeepsake(document.createElement('canvas'), t).toDataURL(); document.body.append(img); }
+</script></body></html>
