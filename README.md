@@ -31,7 +31,11 @@ app/
 ├─ payload.mjs        QR 데이터 형식 NL1:{...}
 ├─ label.mjs          흑백 라벨 렌더러 (B1 Pro 567×354 / B1 384×240)
 ├─ keepsake.mjs       컬러 이름카드 1080×1350 + iPhone 공유 시트 저장
-├─ build-shards.py    이름 사전 생성 → app/dict/ (git에는 포함하지 않음)
+├─ build-shards.py    이름 사전 생성 → app/dict/ (생성본을 레포에 포함)
+├─ dict/              shard/{글자}.json(방문자용 조각) · full.json(오프라인용 통합본) · kanji.json
+├─ sw.js              Service Worker (오프라인 동작)
+├─ manifest.webmanifest, icons/   홈 화면 웹앱 설정·아이콘 (scripts/make-icons.py)
+├─ vercel.json        캐시 헤더, .vercelignore 테스트 파일 제외
 ├─ vendor/            qrcode-generator, jsQR, niimbluelib (오프라인용 로컬 사본)
 └─ test*.mjs          변환·읽기·QR 왕복 테스트 (node)
 docs/design.md        설계 문서
@@ -41,17 +45,39 @@ docs/design.md        설계 문서
 
 ```bash
 cd app
-python3 build-shards.py          # 처음 한 번: JMnedict·KANJIDIC2를 받아 dict/ 생성 (약 22MB)
 python3 -m http.server 3000      # http://localhost:3000 (방문자), /print.html (스태프)
 node test.mjs && node test-qr.mjs && node test-reading.mjs
+python3 build-shards.py          # 사전을 다시 만들 때만 (JMnedict·KANJIDIC2 다운로드)
 ```
+
+## 배포 (Vercel)
+
+빌드가 없는 정적 사이트입니다. 서버 함수가 없어 리전 설정이 필요 없고, 파일은 CDN(도쿄 포함)에서 바로 나갑니다.
+
+| 설정 | 값 |
+|---|---|
+| Framework Preset | Other |
+| Root Directory | `app` |
+| Build Command | (비움) |
+| Output Directory | `.` |
+
+- 사전을 다시 만들면 `sw.js`의 `DICT_CACHE` 값을, 코드를 바꾸면 `VERSION` 값을 올려야 홈 화면 웹앱이 새 버전을 받습니다.
+
+## 오프라인 (팀원 폰)
+
+1. **인터넷이 될 때** iPhone Safari로 사이트를 열고 공유 → 「홈 화면에 추가」
+2. 홈 화면 아이콘으로 열면 사전 통합본(전송 약 1.7MB)을 자동으로 저장하고, 화면 아래에 「✅ オフラインでも使えます」가 표시됩니다.
+3. 그 뒤에는 비행기 모드에서도 처음부터 실행되고, 한자 읽기 후보도 나옵니다.
+
+- 방문자가 브라우저로 열 때는 사전을 미리 받지 않고, 입력한 글자의 조각(수 KB)만 받습니다.
+- 스태프 화면(`print.html`)은 Bluefy에서 열므로 Service Worker가 동작하지 않습니다. 행사 시작 전에 온라인에서 열고, 탭을 닫지 마세요. 인쇄에는 사전이 필요 없습니다.
 
 - 스태프 인쇄: iPhone은 Safari에서 Web Bluetooth를 쓸 수 없으므로 **Bluefy** 브라우저로 `print.html`을 엽니다.
 - 카메라와 블루투스는 HTTPS에서만 동작합니다. 배포는 Cloudflare Pages 같은 정적 호스팅을 기준으로 합니다.
 
 ## 데이터와 라이선스
 
-- 이름 사전: [JMnedict](https://www.edrdg.org/enamdict/enamdict_doc.html), 한자 읽기: [KANJIDIC2](https://www.edrdg.org/wiki/index.php/KANJIDIC_Project). © Electronic Dictionary Research and Development Group, **CC BY-SA 4.0**. 저장소에는 포함하지 않고 `build-shards.py`로 받아 생성합니다.
+- 이름 사전: [JMnedict](https://www.edrdg.org/enamdict/enamdict_doc.html), 한자 읽기: [KANJIDIC2](https://www.edrdg.org/wiki/index.php/KANJIDIC_Project). © Electronic Dictionary Research and Development Group, **CC BY-SA 4.0**. `app/dict/`는 이 데이터를 가공한 파생물이며 같은 CC BY-SA 4.0을 따릅니다. `build-shards.py`로 다시 만들 수 있습니다.
 - `vendor/qrcode.mjs`: qrcode-generator (Kazuhiko Arase), MIT
 - `vendor/jsQR.js`: jsQR (cozmo), Apache-2.0
 - `vendor/niimbluelib.min.js`: NiimBlueLib (MultiMote), MIT. Niimbot 공식 제품이 아닌 비공식 구현입니다.

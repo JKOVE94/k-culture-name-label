@@ -1,5 +1,8 @@
-# 테스트 페이지용 사전 생성 (JMnedict 이름 + KANJIDIC2 한자 읽기)
-#  → dict/shard/{첫 글자 코드}.json, dict/kanji.json
+# 이름 사전 생성 (JMnedict 이름 + KANJIDIC2 한자 읽기)
+#  → dict/shard/{첫 글자 코드}.json  방문자 웹용: 입력한 글자의 조각만 받음
+#  → dict/full.json                 오프라인용 통합본: 홈 화면 웹앱이 한 번에 저장
+#  → dict/kanji.json                한자별 음독·훈독·이름용 읽기
+# 출처: EDRDG JMnedict / KANJIDIC2, CC BY-SA 4.0
 import gzip, re, json, os, collections, urllib.request
 
 def fetch(url, path):
@@ -41,6 +44,9 @@ for ch, d in shards.items():
         json.dump(d, f, ensure_ascii=False, separators=(',', ':'))
 with open('dict/kanji.json', 'w', encoding='utf-8') as f:
     json.dump(kanji, f, ensure_ascii=False, separators=(',', ':'))
+full = {'s': {k: sorted(v) for k, v in sur.items()}, 'g': {k: sorted(v) for k, v in giv.items()}}
+with open('dict/full.json', 'w', encoding='utf-8') as f:
+    json.dump(full, f, ensure_ascii=False, separators=(',', ':'))
 # 노드 테스트용 전체본
 json.dump({'s': {k: sorted(v) for k, v in sur.items()}, 'g': {k: sorted(v) for k, v in giv.items()}},
           open('/tmp/names.json', 'w'), ensure_ascii=False)

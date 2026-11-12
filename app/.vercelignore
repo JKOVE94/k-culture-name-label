@@ -1,0 +1,7 @@
+# 배포에서 제외: 개발·테스트용 파일
+test*.mjs
+*.py
+scripts/
+ime-test.html
+label-test.html
+keepsake-test.html

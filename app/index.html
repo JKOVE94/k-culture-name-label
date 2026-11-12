@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#fff6ee">
+<link rel="manifest" href="./manifest.webmanifest" crossorigin="use-credentials">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ハングルネーム">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>K-CULTURE 体験ブース｜ハングルネーム</title>
 <style>
   :root {
@@ -111,6 +117,9 @@
   .back { margin-top: 12px; font-family: var(--round); font-size: 15px; border: 0; background: none; color: var(--sub); padding: 8px; }
   #cardImg { width: 100%; border-radius: 16px; border: 2px solid var(--ink); }
   .foot { text-align: center; font-size: 11px; color: var(--sub); margin-top: 22px; }
+  .offline { display: block; width: fit-content; margin: 8px auto 0; font-size: 11px; padding: 4px 10px; border-radius: 999px;
+    background: #fff; border: 1px solid #e7d9d3; color: var(--sub); }
+  .offline.ok { color: #2a8f6f; border-color: #bfe8da; background: #eefaf5; }
 
   /* 시트 */
   .sheet-bg { position: fixed; inset: 0; background: rgba(59,47,58,.4); display: none; align-items: flex-end; justify-content: center; z-index: 10; }
@@ -184,10 +193,12 @@
 
   <button class="cta" id="cta" disabled>できた！ QRコードを作る 📱</button>
   <div class="foot">入力した名前は保存されません 🔒</div>
+  <span class="offline" id="offline" hidden></span>
 
   <details>
     <summary>デバッグ</summary>
     <button class="linkbtn" id="copy">기록 복사</button>
+    <button class="linkbtn" id="prepOffline">오프라인 준비 (사전 저장)</button>
     <div id="log"></div>
   </details>
 </main>
@@ -411,6 +422,32 @@ $('copy').onclick = () => navigator.clipboard?.writeText(logEl.textContent);
 const q = new URLSearchParams(location.search).get('q');
 if (q) { nameEl.value = q; refresh(); }
 render();
+
+// ── 오프라인(PWA) ──
+// 홈 화면에서 열면(팀원 폰) 이름 사전 통합본을 저장해 인터넷 없이도 동작하게 한다.
+// 방문자가 브라우저로 열 때는 데이터를 아끼려고 사전을 미리 받지 않는다.
+const swAsk = msg => new Promise(res => {
+  const ch = new MessageChannel(); ch.port1.onmessage = e => res(e.data);
+  const sw = navigator.serviceWorker.controller;
+  if (sw) sw.postMessage(msg, [ch.port2]); else res({ ready: false, error: 'no-controller' });
+});
+const setOffline = (text, ok) => { const el = $('offline'); el.hidden = false; el.textContent = text; el.classList.toggle('ok', !!ok); };
+async function prepareOffline() {
+  setOffline('⏳ オフライン準備中…');
+  const r = await swAsk('prepare-offline');
+  setOffline(r.ready ? '✅ オフラインでも使えます' : '⚠️ オフライン準備に失敗（通信を確認）', r.ready);
+  log('offline', r);
+}
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(async () => {
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) await new Promise(r => navigator.serviceWorker.addEventListener('controllerchange', r, { once: true }));
+    const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    if (standalone) prepareOffline();
+    else if ((await swAsk('status')).ready) setOffline('✅ オフラインでも使えます', true);
+  }).catch(e => log('sw', String(e)));
+  $('prepOffline').onclick = prepareOffline;
+}
 </script>
 </body>
 </html>
