@@ -1,0 +1,11 @@
+# Root Directory를 비워 두고 배포할 때 쓰는 제외 목록 (Root Directory = app 이면 app/.vercelignore 사용)
+docs/
+README.md
+app/test*.mjs
+app/*.py
+app/scripts/
+app/ime-test.html
+app/label-test.html
+app/keepsake-test.html
+app/vercel.json
+app/.vercelignore
