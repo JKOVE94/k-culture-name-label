@@ -1,17 +1,39 @@
 import { renderLabel, PRINTERS } from '../label.mjs';
 let printer = PRINTERS.B1_PRO;
 import { decodePayload } from '../payload.mjs';
+import { toFile, toQrChunks } from '../stats-core.mjs';
+import * as SB from '../supabase.mjs';
+import qrcode from '../vendor/qrcode.mjs';
+qrcode.stringToBytes = s => Array.from(new TextEncoder().encode(s));
 
 const $ = id => document.getElementById(id);
 const log = t => { $('log').textContent = `${new Date().toLocaleTimeString()} ${t}\n` + $('log').textContent; };
 document.getElementById('model').onchange = e => { printer = PRINTERS[e.target.value]; if (current) renderLabel(document.getElementById('label'), current, printer); };
 const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 1800); };
 
-// ── 오늘 인쇄 수 (기기 안에만 저장. 서버 동기화는 나중 단계) ──
-const today = new Date().toISOString().slice(0, 10);
-const stats = JSON.parse(localStorage.getItem('nl-stats') || '{}');
-const showCount = () => { $('count').textContent = `오늘 ${stats[today]?.length ?? 0}장`; };
-showCount();
+// ── 인쇄 기록 (이 폰 안에 저장 → 파일·QR로 내보내기 / Supabase 자동 업로드) ──
+// 방문자 이름은 저장하지 않는다. 시각·방향·재인쇄·스태프가 고른 성별·연령층만 남긴다.
+const dev = JSON.parse(localStorage.getItem('nl-dev') || 'null') ?? { id: Math.random().toString(36).slice(2, 6), name: '' };
+if (!dev.name) dev.name = `인쇄폰-${dev.id}`;
+localStorage.setItem('nl-dev', JSON.stringify(dev));
+let seq = Number(localStorage.getItem('nl-seq') || '0');
+const events = JSON.parse(localStorage.getItem('nl-events-v1') || '[]');
+// 이전 형식(nl-stats) 기록 옮기기
+const legacy = JSON.parse(localStorage.getItem('nl-stats') || 'null');
+if (legacy) {
+  for (const day of Object.values(legacy)) for (const e of day)
+    events.push({ id: `${dev.id}-${(++seq).toString(36)}`, at: e.at, dev: dev.id, dir: 'ja2ko', reprint: !!e.reprint, gender: e.gender ?? 'unset', age: e.age ?? 'unset', final: true });
+  localStorage.removeItem('nl-stats');
+}
+const kstDay = at => new Date(at + 9 * 3600e3).toISOString().slice(0, 10);
+const persist = () => {
+  localStorage.setItem('nl-events-v1', JSON.stringify(events)); localStorage.setItem('nl-seq', String(seq));
+  const today = kstDay(Date.now());
+  const n = events.filter(e => !e.reprint && kstDay(e.at) === today).length;
+  $('count').textContent = `오늘 ${n}장`;
+  $('recSummary').textContent = `이 폰 기록: 오늘 ${n}장 · 전체 ${events.filter(e => !e.reprint).length}장` +
+    (SB.enabled() ? ` · 업로드 대기 ${events.filter(e => e.final && !e.up).length}건` : '');
+};
 
 // ── 프린터 (niimbluelib, Web Bluetooth) ──
 const NB = window.niimbluelib;
@@ -68,13 +90,14 @@ const chipRow = (el, items, key) => {
     const id = e.target.dataset?.id; if (!id || !current) return;
     current[key] = current[key] === id ? 'unset' : id;
     [...el.children].forEach(b => b.classList.toggle('on', b.dataset.id === current[key]));
-    if (current.recorded) saveStats();   // 인쇄 뒤에 눌러도 방금 건에 반영
+    if (current.ev) { current.ev.gender = current.gender; current.ev.age = current.age; persist(); }   // 인쇄 뒤에 눌러도 방금 건에 반영
   };
 };
 chipRow($('gender'), GENDER, 'gender'); chipRow($('age'), AGE, 'age');
 
 function show(p) {
-  current = { ...p, gender: 'unset', age: 'unset', recorded: false };
+  finalize();
+  current = { ...p, gender: 'unset', age: 'unset', ev: null };
   renderLabel($('label'), p, printer);
   $('labelCard').hidden = false;
   document.querySelectorAll('.chip.on').forEach(b => b.classList.remove('on'));
@@ -82,13 +105,16 @@ function show(p) {
 }
 function record() {
   if (!current) return;
-  (stats[today] ??= []).push({ at: Date.now(), reprint: current.recorded, gender: current.gender, age: current.age });
-  current.recorded = true; current.idx = stats[today].length - 1;
-  saveStats();
+  const ev = { id: `${dev.id}-${(++seq).toString(36)}`, at: Date.now(), dev: dev.id, dir: current.bigLang === 'ja' ? 'ko2ja' : 'ja2ko',
+    reprint: !!current.ev, gender: current.gender, age: current.age, final: false };
+  events.push(ev);
+  if (current.ev) current.ev.final = true;   // 재인쇄면 앞 기록은 확정
+  current.ev = ev;
+  persist();
 }
-function saveStats() {
-  if (current?.idx != null) Object.assign(stats[today][current.idx], { gender: current.gender, age: current.age });
-  localStorage.setItem('nl-stats', JSON.stringify(stats)); showCount();
+// 다음 사람으로 넘어갈 때 앞사람 기록을 확정(성별·연령층 수정 끝) → 업로드 대상
+function finalize() {
+  if (current?.ev && !current.ev.final) { current.ev.final = true; persist(); upload(); }
 }
 
 async function handle(text) {
@@ -134,7 +160,7 @@ function stopScan() {
 
 $('printBtn').onclick = () => printLabel();
 $('pngBtn').onclick = () => { const a = document.createElement('a'); a.href = $('label').toDataURL('image/png'); a.download = 'label.png'; a.click(); };
-$('clearBtn').onclick = () => { current = null; $('labelCard').hidden = true; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+$('clearBtn').onclick = () => { finalize(); current = null; $('labelCard').hidden = true; window.scrollTo({ top: 0, behavior: 'smooth' }); };
 $('manualBtn').onclick = () => handle($('manual').value.trim());
 
 // ── 오프라인 운영 (Bluefy에는 Service Worker가 없으므로 "한 번 열면 끝까지" + HTTP 캐시) ──
@@ -185,3 +211,53 @@ $('updBtn').onclick = async () => {
 // Android Chrome·Safari처럼 Service Worker가 되는 브라우저에서는 완전 오프라인도 지원
 // (?nosw: Service Worker 없는 Bluefy 환경을 다른 브라우저에서 흉내 내 시험할 때)
 if (!new URLSearchParams(location.search).has('nosw')) navigator.serviceWorker?.register('./sw.js').catch(() => {});
+
+// ── 기록 관리: 폰 이름, 내보내기(파일·텍스트·QR), Supabase 업로드 ──
+$('devName').value = dev.name;
+$('devName').onchange = () => { dev.name = $('devName').value.trim() || `인쇄폰-${dev.id}`; localStorage.setItem('nl-dev', JSON.stringify(dev)); toast('폰 이름 저장'); };
+const exportData = () => { finalize(); return { devId: dev.id, devName: dev.name, events: events.map(({ final, up, ...e }) => e) }; };
+const fileName = () => `nl-stats-${dev.name}-${kstDay(Date.now())}.json`;
+
+$('expFile').onclick = async () => {
+  const blob = new Blob([toFile(exportData())], { type: 'application/json' });
+  const file = new File([blob], fileName(), { type: 'application/json' });
+  try { if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: fileName() }); return; } } catch (e) { if (e.name === 'AbortError') return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fileName(); a.click();
+};
+$('expText').onclick = async () => {
+  try { await navigator.clipboard.writeText(toFile(exportData())); toast('복사했어요. LINE·카톡 등에 붙여 넣어 보내세요'); }
+  catch { toast('복사 실패: 파일로 내보내기를 써 주세요'); }
+};
+
+let chunks = [], chunkIdx = 0;
+function drawQr(text) {
+  const qr = qrcode(0, 'L'); qr.addData(text, 'Byte'); qr.make();
+  const n = qr.getModuleCount(), cell = 6, q = 3, size = (n + q * 2) * cell, c = $('expQrCanvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size); ctx.fillStyle = '#000';
+  for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (qr.isDark(r, k)) ctx.fillRect((k + q) * cell, (r + q) * cell, cell, cell);
+  $('expQrPage').textContent = `${chunkIdx + 1} / ${chunks.length}  (${dev.name})`;
+}
+$('expQr').onclick = () => { chunks = toQrChunks(exportData()); chunkIdx = 0; drawQr(chunks[0]); $('qrModal').classList.add('open'); };
+$('qrPrev').onclick = () => { if (chunkIdx > 0) drawQr(chunks[--chunkIdx]); };
+$('qrNext').onclick = () => { if (chunkIdx < chunks.length - 1) drawQr(chunks[++chunkIdx]); };
+$('qrClose').onclick = () => $('qrModal').classList.remove('open');
+
+// Supabase (설정돼 있을 때만): 확정된 기록을 인터넷이 될 때 몰아서 올린다
+let uploading = false;
+async function upload() {
+  if (!SB.enabled() || uploading || !navigator.onLine) return;
+  const pending = events.filter(e => e.final && !e.up);
+  if (!pending.length) return;
+  uploading = true;
+  try {
+    await SB.uploadEvents(pending.map(({ final, up, ...e }) => e), dev.name);
+    pending.forEach(e => { e.up = true; }); persist(); log(`uploaded ${pending.length}`);
+  } catch (e) { log('upload ' + e.message); }
+  finally { uploading = false; }
+}
+// 마지막 기록도 2분 지나면 확정해서 올린다
+setInterval(() => { if (current?.ev && !current.ev.final && Date.now() - current.ev.at > 120000) finalize(); upload(); }, 30000);
+addEventListener('online', upload);
+$('sbState').textContent = SB.enabled() ? '자동 업로드: 켜짐 (인터넷이 되면 올라가요)' : '자동 업로드: 꺼짐 (Supabase 미설정) · 파일·QR로 모아 주세요';
+persist(); upload();

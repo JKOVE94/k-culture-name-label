@@ -3,14 +3,14 @@
 // - 화면(HTML): 인터넷이 되면 최신(3초 안에 응답 없으면 저장본), 안 되면 저장본
 // - 이름 사전: 홈 화면 웹앱이 "오프라인 준비"를 요청하면 통합본(full.json)을 한 번 저장하고,
 //   인터넷이 없을 때 글자별 조각 요청을 통합본에서 만들어 돌려준다
-const VERSION = 'nl-app-2026-11-13a';      // 코드를 바꾸면 이 값을 올린다
+const VERSION = 'nl-app-2026-11-13b';      // 코드를 바꾸면 이 값을 올린다
 const DICT_CACHE = 'nl-dict-v1';           // 사전을 다시 만들면 이 값을 올린다
 const DICT_FULL = new URL('./dict/full.json', self.location).href;
 
 const SHELL = [
   './', './index.html', './print.html', './manifest.webmanifest',
   './convert.mjs', './input.mjs', './rank.mjs', './reading.mjs', './honorific.mjs',
-  './payload.mjs', './label.mjs', './keepsake.mjs',
+  './payload.mjs', './label.mjs', './keepsake.mjs', './stats.html', './stats-core.mjs', './supabase.mjs',
   './vendor/qrcode.mjs', './vendor/jsQR.js', './vendor/niimbluelib.min.js',
   './dict/kanji.json',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',

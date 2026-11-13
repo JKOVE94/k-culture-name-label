@@ -13,6 +13,12 @@
 | 통계 | 앱은 **인쇄 횟수만** 자동 기록. 성별·연령층은 **부스 스태프가 직접 입력** (방문자에게 묻지 않음) |
 | 이름 입력 | **"불리고 싶은 이름" 한 칸**. 성만 / 이름만 / 전체, 한자·히라가나·가타카나·한글 모두 허용 |
 
+### v0.10 변경 요약 (통계 모으기)
+1. 인쇄 기록 형식: `{ id: 기기ID-일련번호, at, dev, dir, reprint, gender, age }`. 이름 없음. 인쇄 폰마다 「이 폰 이름」을 설정한다.
+2. **B(수동, 사용 중)**: 인쇄 폰 → QR(조각당 약 25건, `NLS1:` 형식) / JSON 파일 / 텍스트 복사 → 리더 폰 `stats.html`에서 합치기(id 기준 중복 제거). 집계와 CSV 다운로드. `stats.html`은 Service Worker로 오프라인 동작.
+3. **A(자동, 준비됨·꺼짐)**: `supabase.mjs` 설정 + `supabase/migrations/20261113000000_print_events.sql`(RLS: anon insert·select). 다음 스캔 또는 2분 후 기록을 확정하고, 온라인일 때 모아서 업로드(`on_conflict=client_id`, ignore-duplicates).
+4. Niimbot 공식 앱에는 외부에서 인쇄를 요청하는 공개 수단이 없다. 비상시에만 PNG 저장 → 공식 앱에서 불러와 인쇄한다.
+
 ### v0.9 변경 요약 (스태프 화면 오프라인)
 1. **`print.html`을 한 파일로 빌드** (`scripts/build-staff.mjs`, esbuild): jsQR·niimbluelib·라벨 렌더러·QR 해석을 모두 포함 (약 390KB). 열린 뒤에는 네트워크 요청 0회.
 2. **HTTP 캐시로 재실행**: `print.html`만 `Cache-Control: public, max-age=86400`. 온라인일 때마다 `fetch(cache:'reload')`로 캐시를 갱신한다. Chromium에서 서버를 끈 뒤 다시 열기와 라벨 생성까지 확인했다. Bluefy(WKWebView)는 실기 확인이 필요하다.
