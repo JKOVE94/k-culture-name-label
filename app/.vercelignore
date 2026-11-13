@@ -5,3 +5,5 @@ scripts/
 ime-test.html
 label-test.html
 keepsake-test.html
+src/
+package.json

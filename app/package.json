@@ -1,0 +1,12 @@
+{
+  "name": "k-culture-name-label",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:staff": "node scripts/build-staff.mjs",
+    "test": "node test.mjs && node test-qr.mjs && node test-reading.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

@@ -9,3 +9,5 @@ app/label-test.html
 app/keepsake-test.html
 app/vercel.json
 app/.vercelignore
+app/src/
+app/package.json

@@ -13,6 +13,12 @@
 | 통계 | 앱은 **인쇄 횟수만** 자동 기록. 성별·연령층은 **부스 스태프가 직접 입력** (방문자에게 묻지 않음) |
 | 이름 입력 | **"불리고 싶은 이름" 한 칸**. 성만 / 이름만 / 전체, 한자·히라가나·가타카나·한글 모두 허용 |
 
+### v0.9 변경 요약 (스태프 화면 오프라인)
+1. **`print.html`을 한 파일로 빌드** (`scripts/build-staff.mjs`, esbuild): jsQR·niimbluelib·라벨 렌더러·QR 해석을 모두 포함 (약 390KB). 열린 뒤에는 네트워크 요청 0회.
+2. **HTTP 캐시로 재실행**: `print.html`만 `Cache-Control: public, max-age=86400`. 온라인일 때마다 `fetch(cache:'reload')`로 캐시를 갱신한다. Chromium에서 서버를 끈 뒤 다시 열기와 라벨 생성까지 확인했다. Bluefy(WKWebView)는 실기 확인이 필요하다.
+3. **운영 보조**: 온라인/오프라인 띠, 오프라인 중 닫기·새로고침 경고, 화면 꺼짐 방지(Bluefy `setScreenDimEnabled` → Wake Lock), 빌드 버전 표시와 「업데이트 확인」.
+4. Service Worker가 되는 브라우저(Android Chrome 등)에서는 SW로 완전 오프라인.
+
 ### v0.8 변경 요약 (배포·오프라인)
 1. **배포: Vercel 정적 사이트** (Root `app`, 빌드 없음). Cloudflare Pages 대신 Vercel을 쓴다. 서버 함수가 없어 리전 문제가 없다. Supabase는 여러 폰의 기록·표기 사전을 모을 때 붙인다 (미구현).
 2. **이름 사전을 레포에 포함**: `dict/shard/`(4,222개, 방문자용 조각) + `dict/full.json`(7.4MB, gzip 1.7MB, 오프라인용 통합본) + `dict/kanji.json`.

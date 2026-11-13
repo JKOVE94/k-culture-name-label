@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#3b2f3a">
+<title>스태프 인쇄 · 이름 라벨</title>
+<style>
+  :root { --ink:#3b2f3a; --sub:#8a7b86; --pink:#f0628f; --mint:#7fd8c3; --yellow:#ffd66b; --cream:#fff6ee; --red:#e5484d; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-family: "Apple SD Gothic Neo", "Hiragino Sans", sans-serif; background: var(--cream); color: var(--ink); }
+  header { background: var(--ink); color: #fff; padding: 14px 16px calc(14px); display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 17px; margin: 0; }
+  .count { font-size: 13px; background: #fff2; border-radius: 999px; padding: 4px 10px; }
+  main { max-width: 480px; margin: 0 auto; padding: 14px; }
+  .card { background: #fff; border: 2px solid var(--ink); border-radius: 18px; padding: 14px; margin-bottom: 12px; box-shadow: 3px 3px 0 var(--ink); }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
+  .dot.on { background: #2bb673; } .dot.busy { background: var(--yellow); }
+  .status { font-weight: 700; flex: 1; }
+  button { font-family: inherit; font-size: 15px; font-weight: 700; border: 2px solid var(--ink); border-radius: 12px; padding: 10px 14px; background: #fff; color: var(--ink); }
+  button.primary { background: var(--pink); color: #fff; }
+  button.mint { background: var(--mint); }
+  button:disabled { opacity: .45; }
+  select { font-size: 15px; padding: 8px; border-radius: 10px; border: 2px solid var(--ink); background: #fff; }
+  .warn { font-size: 13px; color: var(--red); margin-top: 8px; line-height: 1.5; }
+  .video-wrap { position: relative; border-radius: 14px; overflow: hidden; background: #000; aspect-ratio: 1; }
+  video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .frame { position: absolute; inset: 18%; border: 4px solid #fff; border-radius: 18px; box-shadow: 0 0 0 999px #0006; }
+  .scan-msg { text-align: center; font-size: 13px; color: var(--sub); margin-top: 8px; }
+  #label { width: 100%; image-rendering: pixelated; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
+  .big-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .big-actions .primary { grid-column: span 2; font-size: 19px; padding: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chip { font-size: 14px; padding: 6px 11px; border-radius: 999px; border: 2px solid var(--ink); background: #fff; font-weight: 600; }
+  .chip.on { background: var(--yellow); }
+  .meta-title { font-size: 12px; color: var(--sub); margin-top: 12px; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px;
+    border-radius: 999px; font-size: 14px; opacity: 0; transition: .2s; pointer-events: none; white-space: nowrap; }
+  .toast.show { opacity: 1; }
+  details { font-size: 12px; color: var(--sub); }
+  textarea { width: 100%; font-size: 12px; }
+  .netbar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; font-size: 13px; background: #fff; border-bottom: 2px solid var(--ink); }
+  .netbar #net { flex: 1; font-weight: 700; }
+  .netbar.off { background: #fff4d1; }
+  .netbar .ver { color: var(--sub); font-size: 11px; }
+  .mini { font-size: 12px; padding: 4px 8px; border-radius: 8px; border-width: 1.5px; }
+  #log { font-family: ui-monospace, monospace; font-size: 10px; white-space: pre-wrap; max-height: 160px; overflow: auto; }
+</style>
+</head>
+<body>
+<header><h1>🖨 스태프 인쇄</h1><span class="count" id="count">오늘 0장</span></header>
+<div class="netbar" id="netbar"><span id="net">🟢 온라인</span><span class="ver" id="ver"></span><button class="mini" id="updBtn">업데이트 확인</button></div>
+<main>
+  <!-- 프린터 -->
+  <section class="card">
+    <div class="row">
+      <span class="dot" id="pDot"></span><span class="status" id="pStatus">프린터 연결 안 됨</span>
+      <button id="connect">연결</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <select id="model"><option value="B1_PRO" selected>B1 Pro (300dpi)</option><option value="B1">B1 (203dpi)</option></select>
+      <span style="font-size:13px">진하기</span>
+      <select id="density"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
+      <label style="font-size:13px;display:flex;align-items:center;gap:4px"><input type="checkbox" id="auto" checked> 스캔하면 바로 인쇄</label>
+    </div>
+    <div class="meta-title" id="multiNote">B1 Pro는 iPhone 최대 3대까지 동시에 연결할 수 있어요. 같은 순간에 두 대가 인쇄하지 않도록 해 주세요.</div>
+    <div class="warn" id="btWarn" hidden>이 브라우저는 블루투스를 지원하지 않아요. iPhone에서는 <b>Bluefy</b> 앱으로 이 페이지를 여세요. (스캔·미리보기·PNG 저장은 지금도 됩니다)</div>
+  </section>
+
+  <!-- 스캔 -->
+  <section class="card">
+    <div class="video-wrap" id="videoWrap" hidden><video id="video" playsinline muted></video><div class="frame"></div></div>
+    <div class="row" style="margin-top:10px"><button class="mint" id="scanBtn" style="flex:1">📷 QR 스캔 시작</button></div>
+    <div class="scan-msg" id="scanMsg">방문자 폰의 QR을 비춰 주세요</div>
+  </section>
+
+  <!-- 라벨 -->
+  <section class="card" id="labelCard" hidden>
+    <canvas id="label" width="384" height="240"></canvas>
+    <div class="meta-title">성별 · 연령층 (스태프 판단, 선택)</div>
+    <div class="chips" id="gender"></div>
+    <div class="chips" id="age"></div>
+    <div class="big-actions">
+      <button class="primary" id="printBtn">인쇄하기</button>
+      <button id="pngBtn">PNG 저장</button>
+      <button id="clearBtn">다음 사람</button>
+    </div>
+  </section>
+
+  <details>
+    <summary>테스트 · 기록</summary>
+    <p>QR 대신 데이터를 붙여 넣어 시험할 수 있어요.</p>
+    <textarea id="manual" rows="3">NL1:{"v":1,"b":"다나카 상","s":[["田中","たなか"],["さん"]],"l":"ko","h":"san","id":"test01","t":0}</textarea>
+    <button id="manualBtn">이 데이터로 미리보기</button>
+    <div id="log"></div>
+  </details>
+</main>
+<div class="toast" id="toast"></div>
+
+<!--BUNDLE-->
+
+</body>
+</html>

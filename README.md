@@ -70,7 +70,18 @@ python3 build-shards.py          # 사전을 다시 만들 때만 (JMnedict·KAN
 3. 그 뒤에는 비행기 모드에서도 처음부터 실행되고, 한자 읽기 후보도 나옵니다.
 
 - 방문자가 브라우저로 열 때는 사전을 미리 받지 않고, 입력한 글자의 조각(수 KB)만 받습니다.
-- 스태프 화면(`print.html`)은 Bluefy에서 열므로 Service Worker가 동작하지 않습니다. 행사 시작 전에 온라인에서 열고, 탭을 닫지 마세요. 인쇄에는 사전이 필요 없습니다.
+## 오프라인 (스태프 인쇄 폰, Bluefy)
+
+Bluefy는 Service Worker가 없어서 다른 방식을 씁니다.
+
+- `print.html`은 **한 파일에 모든 코드와 라이브러리가 들어 있는 빌드 결과물**입니다 (약 390KB). 한 번 열리면 인터넷 요청이 더 필요 없습니다.
+  - 수정은 `src/print.src.html`, `src/staff.mjs`에서 하고 `npm i && npm run build:staff`로 다시 만듭니다.
+- `print.html`은 1일 동안 브라우저 캐시에 남기도록 했고, 온라인일 때마다 캐시를 최신으로 다시 채웁니다. 그래서 인터넷 없이 다시 열어도 캐시에서 열릴 수 있습니다. (Chromium에서 확인, **iPhone Bluefy는 실기 확인 필요**)
+- 화면 위 띠가 온라인/오프라인을 보여 주고, 오프라인일 때는 실수로 닫거나 새로고침하면 경고합니다. 화면 꺼짐도 막습니다 (Bluefy API → Wake Lock).
+- 「업데이트 확인」 버튼으로 새 버전을 받을 수 있습니다.
+- Android Chrome에서 열면 Service Worker까지 동작해 완전 오프라인이 됩니다.
+
+**출국 전 iPhone 점검**: Bluefy로 `print.html`을 열기 → Bluefy 앱을 완전히 종료 → 비행기 모드 → Bluefy로 다시 열기. 화면이 뜨면 오프라인 재실행 가능, 안 뜨면 "탭을 열어 둔 채 운영"으로 갑니다.
 
 - 스태프 인쇄: iPhone은 Safari에서 Web Bluetooth를 쓸 수 없으므로 **Bluefy** 브라우저로 `print.html`을 엽니다.
 - 카메라와 블루투스는 HTTPS에서만 동작합니다. 배포는 Cloudflare Pages 같은 정적 호스팅을 기준으로 합니다.
