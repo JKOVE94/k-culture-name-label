@@ -13,6 +13,12 @@
 | 통계 | 앱은 **인쇄 횟수만** 자동 기록. 성별·연령층은 **부스 스태프가 직접 입력** (방문자에게 묻지 않음) |
 | 이름 입력 | **"불리고 싶은 이름" 한 칸**. 성만 / 이름만 / 전체, 한자·히라가나·가타카나·한글 모두 허용 |
 
+### v0.11 변경 요약 (Bluefy 연결)
+1. **검색 필터에서 services 제거**: `filters: [{ namePrefix: 'B1' }, { namePrefix: 'NIIMBOT' }]`. 서비스 UUID(`e7810a71-73ae-499d-8c15-faa9aef0c3f2`, 소문자)는 `optionalServices`로 넘긴다. niimbluelib 기본 클라이언트는 `{ services }`를 필터에 넣어 iOS에서 B1 Pro가 목록에 안 보였다.
+2. `BluefySafeNiimbotClient`(`src/niimbot-ble.mjs`)가 niimbluelib `NiimbotBluetoothClient`를 상속해 `connect` / `findSuitableBluetoothCharacteristic` / `sendRaw`만 덮어쓴다. 라이브러리 파일은 수정하지 않는다.
+3. 쓰기: `writeWithoutResponse`를 지원하면 `writeValueWithoutResponse()`, 아니면 `writeValueWithResponse()`(구형은 `writeValue()`). iOS에서는 패킷 간격 10ms → 15ms.
+4. 모의 테스트 `test-ble.mjs`: 필터·optionalServices·특성 선택·쓰기 분기 확인.
+
 ### v0.10 변경 요약 (통계 모으기)
 1. 인쇄 기록 형식: `{ id: 기기ID-일련번호, at, dev, dir, reprint, gender, age }`. 이름 없음. 인쇄 폰마다 「이 폰 이름」을 설정한다.
 2. **B(수동, 사용 중)**: 인쇄 폰 → QR(조각당 약 25건, `NLS1:` 형식) / JSON 파일 / 텍스트 복사 → 리더 폰 `stats.html`에서 합치기(id 기준 중복 제거). 집계와 CSV 다운로드. `stats.html`은 Service Worker로 오프라인 동작.
@@ -109,11 +115,11 @@
 |---|---|
 | iOS Safari와 홈 화면 웹앱에는 Web Bluetooth가 없다 | 인쇄 담당 iPhone만 **Bluefy**를 쓴다. 입력 폰은 Safari로 충분 |
 | Bluefy(WKWebView)에서는 **Service Worker가 동작하지 않는다**. 오프라인 상태에서 처음부터 다시 열 수 없다 | **"한 번 열면 끝까지"** 방식: 시작할 때 앱, 사전, 폰트 확인, 표기 사전을 모두 메모리와 IndexedDB에 올리고 이후 네트워크 요청 0회. 행사 중에는 **탭을 닫지 않는다** (§11) |
-| Bluefy에서 Niimbot B1이 장치 목록에 안 보였다는 사례가 있다. 같은 회사 M2-H·D110은 Bluefy에서 인쇄된 사례가 있고, **iPhone에서는 장치 이름이 비어 보일 수 있다**는 기록이 있다 | 장치를 **이름 대신 BLE 서비스 UUID로 찾는다**. 그래도 안 되면 전체 장치 표시로 연결한다. 실기 검증 항목에 넣는다 |
+| Bluefy에서 Niimbot B1이 장치 목록에 안 보였다는 사례가 있다. 같은 회사 M2-H·D110은 Bluefy에서 인쇄된 사례가 있고, **iPhone에서는 장치 이름이 비어 보일 수 있다**는 기록이 있다 | (v0.11) iOS는 검색 필터의 서비스 UUID를 "광고에 이 UUID가 있는 기기만"으로 처리해 B1 Pro가 빠진다. **이름 접두사(`B1`, `NIIMBOT`)로만 검색**하고 서비스 UUID는 `optionalServices`로 넘긴다 (`src/niimbot-ble.mjs`) |
 
 ### 3.2 프린터 검증 절차 (D-7주, B1 도착 직후)
 1. iPhone + Bluefy로 `niim.blue`에 접속해 B1이 장치 목록에 보이는지, 50×30 인쇄가 되는지 확인한다.
-2. 자체 테스트 페이지(서비스 UUID로 찾기 / 전체 장치 표시 두 가지 방식)로 다시 확인한다.
+2. 스태프 화면에서 「연결」 → 목록에 `B1-시리얼번호`가 보이는지 확인한다 (이름 접두사 검색).
 3. 인쇄된 라벨에서 한글, 가타카나, 한자 선명도와 농도(1~5)를 확인한다.
 4. 판정
    - **성공** → B1 1대를 추가 구매해 총 2대
@@ -611,7 +617,7 @@ booth-app/
 
 | 위험 | 가능성 | 대응 |
 |---|---|---|
-| B1이 Bluefy에서 연결 안 됨 | 중 | 서비스 UUID로 찾기 → 전체 장치 표시 → ESC/POS 프린터로 교체 (§3.2) |
+| B1이 Bluefy에서 연결 안 됨 | 중 | 이름 접두사 검색 + optionalServices(적용됨) → Android Chrome 폰 → PNG + 공식 앱 (§3.2) |
 | 행사 중 ③의 Bluefy 탭이 닫힘 (오프라인) | 중 | 예비 iPhone 전환 → 핫스폿 → PNG + 공식 앱 (§11) |
 | B1 펌웨어 업데이트로 연동이 깨짐 | 낮음~중 | 검증한 뒤 **공식 앱에서 펌웨어 업데이트 금지** |
 | 정품 라벨 부족 | 중 | 넉넉히 준비하고 일본 Amazon 등 현지 구매처를 미리 확인 |

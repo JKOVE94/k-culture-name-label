@@ -3,6 +3,7 @@ let printer = PRINTERS.B1_PRO;
 import { decodePayload } from '../payload.mjs';
 import { toFile, toQrChunks } from '../stats-core.mjs';
 import * as SB from '../supabase.mjs';
+import { BluefySafeNiimbotClient } from './niimbot-ble.mjs';
 import qrcode from '../vendor/qrcode.mjs';
 qrcode.stringToBytes = s => Array.from(new TextEncoder().encode(s));
 
@@ -46,7 +47,8 @@ $('connect').onclick = async () => {
   if (client) { await client.disconnect(); client = null; return; }
   try {
     setP('busy', '연결 중…');
-    client = NB.instantiateClient('bluetooth');
+    // Bluefy(iOS)에서도 B1 Pro가 목록에 보이도록 이름 접두사로 검색하는 클라이언트 (src/niimbot-ble.mjs)
+    client = new BluefySafeNiimbotClient();
     client.on('disconnect', () => { client = null; setP('', '프린터 연결 끊김'); $('connect').textContent = '연결'; });
     await client.connect();
     const meta = client.getModelMetadata();
@@ -57,7 +59,7 @@ $('connect').onclick = async () => {
       if (PRINTERS[meta.model]) $('model').value = meta.model;
       if (current) renderLabel($('label'), current, printer);
     }
-    log(`connected ${meta?.model} dir=${meta?.printDirection}`);
+    log(`connected ${meta?.model} dir=${meta?.printDirection} write=${client.writeMode} interval=${client.getPacketInterval()}ms`);
   } catch (e) { client = null; setP('', '연결 실패'); log('connect error ' + e); toast('연결 실패: ' + e.message); }
 };
 
