@@ -3,21 +3,25 @@
 <title>라벨 흑백 미리보기</title>
 <style>
   body { margin: 8px; background: #eee; font-family: sans-serif; }
-  .grid { display: grid; grid-template-columns: repeat(2, 284px); gap: 8px; }
-  canvas { background: #fff; image-rendering: pixelated; }
+  .grid { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+  canvas { background: #fff; image-rendering: pixelated; height: 370px; width: auto; }
+  canvas.small { height: 120px; }
 </style></head>
 <body>
 <div class="grid" id="g"></div>
 <script type="module">
 import { renderLabel, PRINTERS } from './label.mjs';
 const samples = [
-  { big: '다나카 상', segs: [{ text: '田中', rt: 'たなか' }, { text: 'さん' }] },
-  { big: '하루토 군', segs: [{ text: '大翔', rt: 'はると' }, { text: 'くん' }] },
-  { big: '사쿠라 짱', segs: [{ text: 'さくら' }, { text: 'ちゃん' }] },
-  { big: 'キム・ミンジュンさん', segs: [{ text: '김민준' }], bigLang: 'ja' },
+  { big: '다나카 상', segs: [{ text: '田中', rt: 'たなか' }, { text: 'さん' }], hon: 'san', no: 1 },
+  { big: '하루토 군', segs: [{ text: '大翔', rt: 'はると' }, { text: 'くん' }], hon: 'kun', no: 42 },
+  { big: '사쿠라 짱', segs: [{ text: 'さくら' }, { text: 'ちゃん' }], hon: 'chan', no: 128 },
+  { big: 'キム・ミンジュンさん', segs: [{ text: '김민준' }], bigLang: 'ja', hon: 'san', no: 7 },
 ];
 await document.fonts.ready;
-// B1 Pro(567×354)를 화면에서는 절반 크기로 표시
-for (const s of samples) { const c = document.createElement('canvas'); c.style.width = '284px'; document.getElementById('g').append(c); renderLabel(c, s, PRINTERS.B1_PRO); }
+const size = new URLSearchParams(location.search).get('size') || '50x80';
+for (const s of samples) {
+  const c = document.createElement('canvas'); if (size === '50x30') c.className = 'small';
+  document.getElementById('g').append(c); renderLabel(c, { ...s, date: Date.parse('2027-01-10T03:00:00Z') }, PRINTERS.B1_PRO, size);
+}
 </script>
 </body></html>

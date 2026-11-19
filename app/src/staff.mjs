@@ -1,4 +1,7 @@
-import { renderLabel, PRINTERS } from '../label.mjs';
+import { renderLabel as drawLabel, PRINTERS, LABEL_SIZES, DEFAULT_SIZE } from '../label.mjs';
+// 라벨 크기: 50×80 포토카드(기본) / 50×30 이름표. 고른 값은 이 폰에 기억한다
+let labelSize = localStorage.getItem('nl-label-size') || DEFAULT_SIZE;
+const renderLabel = (canvas, data, prn) => drawLabel(canvas, data, prn, labelSize);
 let printer = PRINTERS.B1_PRO;
 import { decodePayload } from '../payload.mjs';
 import { toFile, toQrChunks } from '../stats-core.mjs';
@@ -10,6 +13,12 @@ qrcode.stringToBytes = s => Array.from(new TextEncoder().encode(s));
 const $ = id => document.getElementById(id);
 const log = t => { $('log').textContent = `${new Date().toLocaleTimeString()} ${t}\n` + $('log').textContent; };
 document.getElementById('model').onchange = e => { printer = PRINTERS[e.target.value]; if (current) renderLabel(document.getElementById('label'), current, printer); };
+{
+  const sel = document.getElementById('labelSize');
+  sel.innerHTML = Object.entries(LABEL_SIZES).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
+  sel.value = labelSize;
+  sel.onchange = () => { labelSize = sel.value; localStorage.setItem('nl-label-size', labelSize); if (current) renderLabel(document.getElementById('label'), current, printer); };
+}
 const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 1800); };
 
 // ── 인쇄 기록 (이 폰 안에 저장 → 파일·QR로 내보내기 / Supabase 자동 업로드) ──
@@ -99,8 +108,11 @@ chipRow($('gender'), GENDER, 'gender'); chipRow($('age'), AGE, 'age');
 
 function show(p) {
   finalize();
-  current = { ...p, gender: 'unset', age: 'unset', ev: null };
-  renderLabel($('label'), p, printer);
+  // 포토카드 번호: 오늘 이 폰에서 몇 번째 방문자인지
+  const today = kstDay(Date.now());
+  const no = events.filter(e => !e.reprint && kstDay(e.at) === today).length + 1;
+  current = { ...p, no, date: Date.now(), gender: 'unset', age: 'unset', ev: null };
+  renderLabel($('label'), current, printer);
   $('labelCard').hidden = false;
   document.querySelectorAll('.chip.on').forEach(b => b.classList.remove('on'));
   $('labelCard').scrollIntoView({ behavior: 'smooth', block: 'start' });

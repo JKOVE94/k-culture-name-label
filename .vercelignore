@@ -11,3 +11,4 @@ app/vercel.json
 app/.vercelignore
 app/src/
 app/package.json
+app/package-lock.json

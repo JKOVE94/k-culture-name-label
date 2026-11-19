@@ -13,6 +13,12 @@
 | 통계 | 앱은 **인쇄 횟수만** 자동 기록. 성별·연령층은 **부스 스태프가 직접 입력** (방문자에게 묻지 않음) |
 | 이름 입력 | **"불리고 싶은 이름" 한 칸**. 성만 / 이름만 / 전체, 한자·히라가나·가타카나·한글 모두 허용 |
 
+### v0.12 변경 요약 (50×80 포토카드)
+1. **라벨 기본 크기를 50×80 포토카드(세로)로** 변경 (B1 Pro 567×945px). 스태프 화면에서 50×80 / 50×30 선택, 폰에 기억.
+2. 포토카드 구성: 흑백 색동 띠(위·아래), K-CULTURE 뱃지, 인사말, 큰 이름, 원래 이름+후리가나, 한글 글자 블록(로마자), 메시지, 날짜·No.(그날 그 폰의 몇 번째 방문자), 하단 문구.
+3. 일본인 카드(일→한)와 한국인 카드(한→일)는 인사말·메시지·하단 문구 언어를 바꾸고, 한국인 카드는 글자 블록 대신 이름을 크게.
+4. 보관 아이디어는 `docs/keepsake-ideas.md` (현지 100엔샵 수급 기준).
+
 ### v0.11 변경 요약 (Bluefy 연결)
 1. **검색 필터에서 services 제거**: `filters: [{ namePrefix: 'B1' }, { namePrefix: 'NIIMBOT' }]`. 서비스 UUID(`e7810a71-73ae-499d-8c15-faa9aef0c3f2`, 소문자)는 `optionalServices`로 넘긴다. niimbluelib 기본 클라이언트는 `{ services }`를 필터에 넣어 iOS에서 B1 Pro가 목록에 안 보였다.
 2. `BluefySafeNiimbotClient`(`src/niimbot-ble.mjs`)가 niimbluelib `NiimbotBluetoothClient`를 상속해 `connect` / `findSuitableBluetoothCharacteristic` / `sendRaw`만 덮어쓴다. 라이브러리 파일은 수정하지 않는다.

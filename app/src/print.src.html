@@ -28,7 +28,7 @@
   video { width: 100%; height: 100%; object-fit: cover; display: block; }
   .frame { position: absolute; inset: 18%; border: 4px solid #fff; border-radius: 18px; box-shadow: 0 0 0 999px #0006; }
   .scan-msg { text-align: center; font-size: 13px; color: var(--sub); margin-top: 8px; }
-  #label { width: 100%; image-rendering: pixelated; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
+  #label { display: block; margin: 0 auto; max-width: 100%; max-height: 62vh; width: auto; height: auto; image-rendering: pixelated; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
   .big-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
   .big-actions .primary { grid-column: span 2; font-size: 19px; padding: 14px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
@@ -64,6 +64,7 @@
     </div>
     <div class="row" style="margin-top:10px">
       <select id="model"><option value="B1_PRO" selected>B1 Pro (300dpi)</option><option value="B1">B1 (203dpi)</option></select>
+      <select id="labelSize"></select>
       <span style="font-size:13px">진하기</span>
       <select id="density"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
       <label style="font-size:13px;display:flex;align-items:center;gap:4px"><input type="checkbox" id="auto" checked> 스캔하면 바로 인쇄</label>

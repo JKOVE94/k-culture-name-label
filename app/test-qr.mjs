@@ -1,8 +1,11 @@
 // QR 왕복 테스트: 방문자 화면에서 만든 QR → 스태프 화면의 jsQR로 읽어 같은 데이터가 나오는지
-import { createRequire } from 'node:module';
+import vm from 'node:vm';
+import fs from 'node:fs';
 import qrcode from './vendor/qrcode.mjs';
 import { encodePayload, decodePayload } from './payload.mjs';
-const jsQR = createRequire(import.meta.url)('./vendor/jsQR.js');
+// package.json이 "type": "module"이라 UMD 파일은 vm으로 읽는다
+const sandbox = { self: {} }; vm.runInNewContext(fs.readFileSync(new URL('./vendor/jsQR.js', import.meta.url), 'utf8'), sandbox);
+const jsQR = sandbox.self.jsQR ?? sandbox.jsQR;
 qrcode.stringToBytes = s => Array.from(new TextEncoder().encode(s));
 
 const tickets = [
