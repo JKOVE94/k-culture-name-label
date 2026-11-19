@@ -27,18 +27,19 @@ export const PHOTO_CASES = {
   scene:    { ko: '활동·풍경 사진', ja: '今日の写真・景色' },
 };
 export const TEMPLATES = {
+  // ko = 스태프 화면용, ja = 일본인 방문자용, kr = 한국인 방문자용(가타카나 카드)
   // 사진 없음
-  'n-saekdong': { case: 'none', base: 'saekdong', ko: '색동 이름표', ja: 'セットン（虹色のしま）' },
-  'n-wonchang': { case: 'none', base: 'changsal', ko: '한옥 둥근 창', ja: '韓屋のまるまど' },
-  'n-idcard':   { case: 'none', base: 'idcard',   ko: '한글 이름 증명서', ja: 'ハングル名前証' },
+  'n-saekdong': { case: 'none', base: 'saekdong', ko: '색동 이름표', ja: 'セットンの名札', kr: '색동 이름표' },
+  'n-wonchang': { case: 'none', base: 'changsal', ko: '한옥 둥근 창', ja: '韓屋のまるまど', kr: '한옥 둥근 창' },
+  'n-idcard':   { case: 'none', base: 'idcard',   ko: '한글 이름 증명서', ja: 'ハングル名前証', kr: '일본어 이름 증명서' },
   // 인물 사진
-  'p-passport': { case: 'portrait', base: 'passport', ko: '한글 여권', ja: 'ハングルパスポート' },
-  'p-changsal': { case: 'portrait', base: 'changsal', ko: '한옥 창문', ja: '韓屋のまど' },
-  'p-saekdong': { case: 'portrait', base: 'saekdong', ko: '색동 포토카드', ja: 'セットンのトレカ' },
+  'p-passport': { case: 'portrait', base: 'passport', ko: '한글 여권', ja: 'ハングルパスポート', kr: '가타카나 여권' },
+  'p-changsal': { case: 'portrait', base: 'changsal', ko: '한옥 창문', ja: '韓屋のまど', kr: '한옥 창문' },
+  'p-saekdong': { case: 'portrait', base: 'saekdong', ko: '색동 포토카드', ja: 'セットンのトレカ', kr: '색동 포토카드' },
   // 활동·풍경 사진
-  's-bojagi':   { case: 'scene', base: 'bojagi',   ko: '조각보 추억', ja: 'ポジャギの思い出' },
-  's-changsal': { case: 'scene', base: 'changsal', ko: '한옥 창살 풍경', ja: '韓屋のまどから' },
-  's-cert':     { case: 'scene', base: 'cert',     ko: '한국 문화 체험 인증서', ja: '韓国文化体験の証' },
+  's-bojagi':   { case: 'scene', base: 'bojagi',   ko: '조각보 추억', ja: 'ポジャギの思い出', kr: '조각보 추억' },
+  's-changsal': { case: 'scene', base: 'changsal', ko: '한옥 창살 풍경', ja: '韓屋のまどの景色', kr: '한옥 창살 풍경' },
+  's-cert':     { case: 'scene', base: 'cert',     ko: '한국 문화 체험 인증서', ja: '韓国文化体験証', kr: '한국 문화 체험 인증서' },
 };
 export const DEFAULT_TEMPLATE = 'n-saekdong';
 export const templatesFor = c => Object.keys(TEMPLATES).filter(k => TEMPLATES[k].case === c);

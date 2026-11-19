@@ -120,10 +120,33 @@
   .tpl { border: 2px solid var(--ink); border-radius: 14px; background: #fff; padding: 6px 4px 6px; font-family: var(--round); font-size: 11px; color: var(--ink); box-shadow: 2px 2px 0 var(--ink); }
   .tpl canvas { width: 100%; height: auto; display: block; border-radius: 8px; margin-bottom: 4px; }
   .tpl.on { background: var(--yellow); box-shadow: 0 0 0 3px var(--pink-d); }
-  .tpl b { display: block; font-size: 12px; }
+  .tpl b { display: block; font-size: 12px; line-height: 1.3; }
+  /* ③ 사진: 케이스 카드 3개 */
+  .case-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .case { position: relative; border: 2px solid var(--ink); border-radius: 16px; background: #fff; padding: 12px 4px 10px;
+    font-family: var(--round); color: var(--ink); box-shadow: 3px 3px 0 var(--ink); text-align: center; transition: transform .08s; }
+  .case:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+  .case .ico { display: block; font-size: 28px; line-height: 1.1; }
+  .case b { display: block; font-size: 13px; margin-top: 6px; }
+  .case i { display: block; font-style: normal; font-size: 10.5px; color: var(--sub); margin-top: 2px; }
+  .case.on { background: var(--yellow-l); border-color: var(--pink-d); box-shadow: 0 0 0 3px var(--pink-l), 3px 3px 0 var(--pink-d); }
+  .case.on::after { content: "✓"; position: absolute; top: -9px; right: -7px; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--pink-d); color: #fff; font-size: 13px; font-weight: 800; display: grid; place-items: center; border: 2px solid #fff; }
+  /* 사진 고르기 / 찍기 */
+  .pick-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .pick-btn { border: 2px dashed var(--pink); border-radius: 16px; background: var(--pink-l); padding: 14px 6px; font-family: var(--round); color: var(--ink); }
+  .pick-btn .ico { display: block; font-size: 26px; }
+  .pick-btn b { display: block; font-size: 14px; margin-top: 4px; }
+  .pick-btn i { display: block; font-style: normal; font-size: 10.5px; color: var(--sub); margin-top: 2px; }
+  /* 자르기 */
   .crop-wrap { margin-top: 12px; }
-  .crop-wrap canvas { width: 100%; height: auto; display: block; border-radius: 16px; border: 3px solid var(--ink); touch-action: none; background: #f3eee9; }
-  .crop-wrap input[type=range] { width: 100%; margin-top: 8px; accent-color: var(--pink-d); }
+  .crop-frame { position: relative; border-radius: 18px; border: 3px solid var(--ink); overflow: hidden; box-shadow: 4px 4px 0 var(--mint); }
+  .crop-frame canvas { width: 100%; height: auto; display: block; touch-action: none; background: #f3eee9; }
+  .crop-badge { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); background: rgba(59,47,58,.78); color: #fff;
+    font-size: 12px; padding: 5px 12px; border-radius: 999px; white-space: nowrap; pointer-events: none; }
+  .zoom-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--sub); }
+  .zoom-row input { flex: 1; accent-color: var(--pink-d); }
+  .redo { margin-top: 8px; border: 0; background: none; font-family: var(--round); font-size: 13px; color: var(--pink-d); font-weight: 800; padding: 4px; }
   .sticker-photo { display: block; width: 72%; margin: 6px auto 8px; border-radius: 14px; border: 3px solid var(--ink); }
   .sending { font-size: 13px; font-weight: 800; color: var(--pink-d); margin-top: 10px; }
   .cta.save { background: var(--mint); color: var(--ink); margin-top: 18px; font-size: 17px; }
@@ -191,23 +214,26 @@
   </section>
 
   <section class="step" id="photoStep">
-    <div class="step-head"><span class="num n4" id="photoNum">3</span>写真もいれる？ <small>なくてもOK・保存されません</small></div>
-    <div class="chips" id="caseChips"></div>
-    <div class="chips" id="pickRow" style="margin-top:10px" hidden>
-      <button class="chip" id="pickBtn">🖼 写真をえらぶ</button>
-      <button class="chip" id="camBtn">🤳 その場で撮る</button>
+    <div class="step-head"><span class="num n4" id="photoNum">3</span><span id="photoTitle">写真もいれる？</span> <small id="photoSub">なくてもOK・保存されません</small></div>
+    <div class="case-grid" id="caseChips"></div>
+    <div class="pick-row" id="pickRow" hidden>
+      <button class="pick-btn" id="pickBtn"><span class="ico">🖼</span><b id="pickTxt">アルバムから</b><i id="pickSub">スマホの写真をえらぶ</i></button>
+      <button class="pick-btn" id="camBtn"><span class="ico">📷</span><b id="camTxt">いま撮る</b><i id="camSub">カメラが開きます</i></button>
     </div>
     <input type="file" id="pickInput" accept="image/*" hidden>
     <input type="file" id="camInput" accept="image/*" capture="user" hidden>
     <div class="crop-wrap" id="cropWrap" hidden>
-      <canvas id="crop" width="500" height="550"></canvas>
-      <div class="tip">指でドラッグして位置、スライダーで大きさを調整してね</div>
-      <input type="range" id="zoom" min="1" max="3" step="0.01" value="1">
+      <div class="crop-frame">
+        <canvas id="crop" width="500" height="550"></canvas>
+        <span class="crop-badge" id="cropBadge">👆 ドラッグで位置を調整</span>
+      </div>
+      <div class="zoom-row"><span>🔍－</span><input type="range" id="zoom" min="1" max="3" step="0.01" value="1"><span>＋</span></div>
+      <button class="redo" id="changePhoto">🔄 <span id="changeTxt">写真をかえる</span></button>
     </div>
   </section>
 
   <section class="step" id="tplStep">
-    <div class="step-head"><span class="num n5" id="tplNum">4</span>シールのデザイン <small>韓国の伝統もよう</small></div>
+    <div class="step-head"><span class="num n5" id="tplNum">4</span><span id="tplTitle">シールのデザイン</span> <small id="tplSub">韓国の伝統もよう</small></div>
     <div class="tpl-grid" id="tpls"></div>
   </section>
 
@@ -416,21 +442,49 @@ function render() {
   if (hasPhoto) $('stickerPhoto').src = cropCanvas(400, Math.round(400 / cropAspect())).toDataURL('image/jpeg', 0.85);
   if (ticket) Object.assign(ticket, { tpl: currentTpl(), photoKind: hasPhoto ? crop.kind : null });
   $('tplNum').textContent = String(Number($('photoNum').textContent) + 1);
+  applyLang();
   queueTplPreviews();
 }
 let ticket = null;
 
 // ── 포카 디자인 고르기: 지금 이름·사진으로 4가지 템플릿을 작게 그려 보여 준다 ──
 // (인쇄용 흑백 그대로가 아니라 먹색·크림색으로 물들여 보여 준다)
+// ③ 사진 · ④ 디자인 단계는 방문자 언어로만 보여 준다 (일본어 입력 → 일본어, 한글 입력 → 한국어)
+const STR = {
+  ja: { photoTitle: '写真もいれる？', photoSub: 'なくてもOK・保存されません', pickTxt: 'アルバムから', pickSub: 'スマホの写真をえらぶ',
+        camTxt: 'いま撮る', camSub: 'カメラが開きます', cropBadge: '👆 ドラッグで位置を調整', changeTxt: '写真をかえる',
+        tplTitle: 'シールのデザイン', tplSub: '韓国の伝統もよう',
+        cases: { none: ['🚫', '写真なし', '名前だけのシール'], portrait: ['🙂', '自分の写真', '顔・自撮り'], scene: ['🏞', '今日の写真', '体験・景色'] } },
+  ko: { photoTitle: '사진도 넣을까요?', photoSub: '없어도 괜찮아요 · 저장되지 않아요', pickTxt: '앨범에서', pickSub: '휴대폰 사진 고르기',
+        camTxt: '지금 찍기', camSub: '카메라가 열려요', cropBadge: '👆 드래그해서 위치 조정', changeTxt: '사진 바꾸기',
+        tplTitle: '스티커 디자인', tplSub: '한국 전통 무늬',
+        cases: { none: ['🚫', '사진 없음', '이름만 넣기'], portrait: ['🙂', '내 사진', '얼굴·셀카'], scene: ['🏞', '오늘의 사진', '체험·풍경'] } },
+};
+let uiLang = 'ja';
+function applyLang() {
+  const L = mode === 'ko' ? 'ko' : 'ja';
+  if (L === uiLang && $('caseChips').children.length) return;
+  uiLang = L;
+  for (const k of ['photoTitle', 'photoSub', 'pickTxt', 'pickSub', 'camTxt', 'camSub', 'cropBadge', 'changeTxt', 'tplTitle', 'tplSub']) $(k).textContent = STR[L][k];
+  drawCaseChips(); tplCaseShown = '';
+}
+function drawCaseChips() {
+  $('caseChips').innerHTML = Object.keys(PHOTO_CASES).map(k => {
+    const [ico, t, sub] = STR[uiLang].cases[k];
+    return `<button class="case ${k === photoCase ? 'on' : ''}" data-c="${k}"><span class="ico">${ico}</span><b>${t}</b><i>${sub}</i></button>`;
+  }).join('');
+}
+
 // 사진 케이스: none(사진 없음, 기본) / portrait(인물) / scene(활동·풍경). 케이스마다 템플릿 3종
 let photoCase = 'none';
 const tplByCase = JSON.parse(localStorage.getItem('nl-tpl-case') || '{}');
 const currentTpl = () => resolveTemplate(tplByCase[photoCase], photoCase);
 let tplCaseShown = '';
 function buildTplButtons() {
-  if (tplCaseShown === photoCase) return;
-  tplCaseShown = photoCase;
-  $('tpls').innerHTML = templatesFor(photoCase).map(k => `<button class="tpl" data-t="${k}"><canvas></canvas><b>${TEMPLATES[k].ko}</b>${TEMPLATES[k].ja}</button>`).join('');
+  if (tplCaseShown === photoCase + uiLang) return;
+  tplCaseShown = photoCase + uiLang;
+  const name = k => (uiLang === 'ko' ? TEMPLATES[k].kr : TEMPLATES[k].ja);
+  $('tpls').innerHTML = templatesFor(photoCase).map(k => `<button class="tpl" data-t="${k}"><canvas></canvas><b>${name(k)}</b></button>`).join('');
 }
 $('tpls').onclick = e => { const b = e.target.closest('.tpl'); if (!b) return; tplByCase[photoCase] = b.dataset.t; localStorage.setItem('nl-tpl-case', JSON.stringify(tplByCase)); render(); };
 let tplTimer = 0;
@@ -490,14 +544,15 @@ async function setPhoto(file) {
 function setCase(c) {
   photoCase = c;
   crop.kind = c === 'portrait' ? 'portrait' : 'landscape';
-  $('caseChips').innerHTML = Object.entries(PHOTO_CASES).map(([k, v]) => `<button class="chip ${k === c ? 'on' : ''}" data-c="${k}">${k === 'none' ? '🚫 ' : k === 'portrait' ? '🙂 ' : '🏞 '}${v.ja}</button>`).join('');
-  $('pickRow').hidden = c === 'none';
+  drawCaseChips();
+  $('pickRow').hidden = c === 'none' || !!crop.img;   // 사진을 넣었으면 고르기 버튼 대신 자르기 화면
   $('cropWrap').hidden = c === 'none' || !crop.img;
   const cv = $('crop'); cv.width = 500; cv.height = Math.round(500 / cropAspect());
   Object.assign(crop, { x: 0, y: 0 });
   drawCrop(); render();
 }
 $('caseChips').onclick = e => { const c = e.target.closest('button')?.dataset.c; if (c) setCase(c); };
+$('changePhoto').onclick = () => $('pickInput').click();
 $('pickBtn').onclick = () => $('pickInput').click();
 $('camBtn').onclick = () => $('camInput').click();
 $('pickInput').onchange = e => { setPhoto(e.target.files[0]); e.target.value = ''; };
