@@ -319,7 +319,7 @@ import { createReader } from './reading.mjs';
 import { splitKorean } from './input.mjs';
 import { saveCanvas } from './keepsake.mjs';
 import { encodePayload } from './payload.mjs';
-import { encodePhoto, photoChunks } from './photo-qr.mjs';
+import { encodePhoto, b64ToBytes, photoFountain, newPhotoId } from './photo-qr.mjs';
 import { renderLabelColor, TEMPLATES, PHOTO_CASES, templatesFor, resolveTemplate, photoAspect, guessPhotoKind } from './label.mjs';
 import qrcode from './vendor/qrcode.mjs';
 qrcode.stringToBytes = s => Array.from(new TextEncoder().encode(s));   // 한글·일본어를 UTF-8로
@@ -616,7 +616,13 @@ $('zoom').onchange = render;
 
 // ── 완료 창 ──
 function drawQr(canvas, text, level = 'M') {
-  const qr = qrcode(0, level); qr.addData(text, 'Byte'); qr.make();
+  const qr = qrcode(0, level);
+  if (typeof text === 'string') qr.addData(text, 'Byte');
+  else {   // 사진 조각: 바이트를 그대로 (UTF-8 변환 없이)
+    const save = qrcode.stringToBytes; qrcode.stringToBytes = () => Array.from(text);
+    qr.addData('_'.repeat(text.length), 'Byte'); qrcode.stringToBytes = save;
+  }
+  qr.make();
   const n = qr.getModuleCount(), cell = 8, quiet = 2, size = (n + quiet * 2) * cell;
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d');
@@ -630,17 +636,21 @@ async function openDone() {
   clearInterval(qrTimer);
   let frames;
   if (photoCase !== 'none' && crop.img) {
-    const id = Math.random().toString(36).slice(2, 8);
+    // 사진: 분수 부호 조각을 끝없이 새로 만들어 띄운다 → 스태프 폰은 아무 조각이나 k장 남짓 읽으면 끝
+    const id = newPhotoId();
     const [ew, eh] = crop.kind === 'landscape' ? [240, 150] : [200, 220];
-    const chunks = photoChunks(id, await encodePhoto(cropCanvas(ew * 2, eh * 2), { width: ew, height: eh }));
-    const name = encodePayload({ ...ticket, photo: { id, n: chunks.length } });
-    frames = chunks.flatMap((c, i) => (i % 3 === 0 ? [name, c] : [c]));   // 이름 QR을 사이사이 끼워 넣는다
-  } else frames = [encodePayload(ticket)];
-  let k = 0;
-  const show = () => drawQr($('qr'), frames[k++ % frames.length], frames.length > 1 ? 'L' : 'M');
+    const fz = photoFountain(id, b64ToBytes(await encodePhoto(cropCanvas(ew * 2, eh * 2), { width: ew, height: eh })));
+    const name = encodePayload({ ...ticket, photo: { id, n: fz.k } });
+    let seq = 0, shown = 0;
+    frames = { next: () => (shown++ % 6 === 0 ? name : fz.frame(seq++ % 65536)) };   // 6장에 1번 이름 QR
+    const dump = new URLSearchParams(location.search).get('framedump');   // 개발용: 띄울 프레임을 텍스트로 시험 서버에 보낸다
+    if (dump) { const b64 = f => typeof f === 'string' ? f : 'NLP2B64:' + btoa(String.fromCharCode(...f)); const t = { next: frames.next };
+      fetch('/' + dump, { method: 'POST', body: Array.from({ length: 16 }, (_, i) => b64(t.next())).filter((_, i) => ![1, 3, 4].includes(i)).join('\n') }); }
+  } else frames = null;
+  const show = () => drawQr($('qr'), frames ? frames.next() : encodePayload(ticket), frames ? 'L' : 'M');
   show();
-  if (frames.length > 1) qrTimer = setInterval(show, 350);
-  $('sending').hidden = frames.length === 1;
+  if (frames) qrTimer = setInterval(show, 250);
+  $('sending').hidden = !frames;
   $('doneBg').classList.add('open');
 }
 $('doneBack').onclick = () => { clearInterval(qrTimer); $('doneBg').classList.remove('open'); };

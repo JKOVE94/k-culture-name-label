@@ -17,7 +17,7 @@ import { decodePayload } from '../payload.mjs';
 import { toFile, toQrChunks } from '../stats-core.mjs';
 import * as SB from '../supabase.mjs';
 import { BluefySafeNiimbotClient } from './niimbot-ble.mjs';
-import { PhotoCollector, PHOTO_PREFIX } from '../photo-qr.mjs';
+import { PhotoCollector, PHOTO_PREFIX, isPhotoFrame, b64ToBytes } from '../photo-qr.mjs';
 import qrcode from '../vendor/qrcode.mjs';
 qrcode.stringToBytes = s => Array.from(new TextEncoder().encode(s));
 
@@ -174,7 +174,13 @@ async function proceed(p) {
   if ($('auto').checked && client && !seen.has('printed:' + p.id)) { if (await printLabel()) seen.add('printed:' + p.id); }
 }
 
+// v2 사진 조각(바이너리)
+async function handlePhotoFrame(bytes) {
+  const st = photos.addFrame(bytes);
+  if (st && pending?.photo?.id === st.id) { showProgress(st); if (st.done) await completePending(); }
+}
 async function handle(text) {
+  if (text.startsWith('NLP2B64:')) return handlePhotoFrame(b64ToBytes(text.slice(8)));   // 시험용(?frames=·붙여넣기)
   if (text.startsWith(PHOTO_PREFIX)) {
     const st = photos.add(text);
     if (st && pending?.photo?.id === st.id) { showProgress(st); if (st.done) await completePending(); }
@@ -207,14 +213,17 @@ $('scanBtn').onclick = async () => {
     let last = 0;
     const tick = t => {
       raf = requestAnimationFrame(tick);
-      if (t - last < 120) return; last = t;           // 초당 약 8번만 검사 (배터리 절약)
+      // 사진을 받는 중에는 매 화면마다 검사, 평소에는 초당 약 8번 (배터리 절약)
+      if (!pending && t - last < 120) return; last = t;
       const v = $('video'); if (!v.videoWidth) return;
       const s = Math.min(v.videoWidth, v.videoHeight, 640);
       work.width = work.height = s;
       wctx.drawImage(v, (v.videoWidth - s) / 2, (v.videoHeight - s) / 2, s, s, 0, 0, s, s);
       const code = window.jsQR(wctx.getImageData(0, 0, s, s).data, s, s, { inversionAttempts: 'dontInvert' });
       if (code) {
-        const text = new TextDecoder().decode(new Uint8Array(code.binaryData));
+        const bytes = new Uint8Array(code.binaryData);
+        if (isPhotoFrame(bytes)) { handlePhotoFrame(bytes); return; }   // 같은 조각을 또 읽어도 소거법이 알아서 버린다
+        const text = new TextDecoder().decode(bytes);
         if (text !== handle.last || t - handle.at > 3000) { handle.last = text; handle.at = t; navigator.vibrate?.(60); handle(text); }
       }
     };
