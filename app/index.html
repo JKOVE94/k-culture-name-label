@@ -162,6 +162,10 @@
   .zoom-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--sub); }
   .zoom-row input { flex: 1; accent-color: var(--pink-d); }
   .redo { margin-top: 8px; border: 0; background: none; font-family: var(--round); font-size: 13px; color: var(--pink-d); font-weight: 800; padding: 4px; }
+  .final-card { margin: 4px auto 0; width: min(78%, 300px); }
+  .final-card canvas { display: block; width: 100%; height: auto; border-radius: 14px; box-shadow: 0 0 0 3px var(--ink), 7px 7px 0 3px var(--pink); }
+  .final-tag { margin-top: 14px; font-size: 12px; color: var(--sub); }
+  .final-tag b { color: var(--ink); }
   .sticker-photo { display: block; width: 72%; margin: 6px auto 8px; border-radius: 14px; border: 3px solid var(--ink); }
   .sending { font-size: 13px; font-weight: 800; color: var(--pink-d); margin-top: 10px; }
   .cta.save { background: var(--mint); color: var(--ink); margin-top: 18px; font-size: 17px; }
@@ -252,18 +256,16 @@
     <div class="tpl-grid" id="tpls"></div>
   </section>
 
-  <div class="sticker-area">
-    <div class="speech">韓国語だと、こうなります！</div>
-    <div class="sticker">
+  <div class="sticker-area" id="resultArea">
+    <div class="speech" id="speech">韓国語だと、こうなります！</div>
+    <!-- 최종 결과 = 방문자가 고른 디자인의 컬러 카드 (저장 이미지와 같은 그림, 인쇄는 흑백) -->
+    <div class="final-card" id="filled" hidden>
+      <canvas id="finalCard" width="720" height="1152"></canvas>
+      <div class="final-tag" id="finalTag"></div>
+    </div>
+    <div class="sticker" id="emptyBox">
       <span class="corner tl">🌸</span><span class="corner br">💖</span>
-      <div id="filled" hidden>
-        <img id="stickerPhoto" class="sticker-photo" alt="" hidden>
-        <div class="hello">안녕하세요!</div>
-        <div class="big" id="big"></div>
-        <div class="small" id="small"></div>
-        <div class="tiles" id="tiles"></div>
-      </div>
-      <div class="empty" id="empty"><span class="bubble">🫧</span>名前を入れると、ここにハングルが出てきます</div>
+      <div class="empty" id="empty"><span class="bubble">🫧</span><span id="emptyTxt">名前を入れると、ここにハングルが出てきます</span></div>
     </div>
   </div>
 
@@ -459,10 +461,7 @@ function render() {
     tileText = nameEl.value.trim();
   }
   drawHon(baseName);
-  $('filled').hidden = !big; $('empty').hidden = !!big;
-  $('big').textContent = big;
-  $('small').innerHTML = smallHtml;
-  $('tiles').innerHTML = [...tileText].filter(c => c.trim()).map(c => `<span class="tile"><b>${esc(c)}</b><i>${roman(c)}</i></span>`).join('');
+  $('filled').hidden = !big; $('emptyBox').hidden = !!big;
   $('cta').disabled = !big;
 
   // 완료 창에서 쓸 현재 결과
@@ -473,8 +472,6 @@ function render() {
       : [{ text: nameEl.value.trim() }],
   };
   const hasPhoto = photoCase !== 'none' && !!crop.img;
-  $('stickerPhoto').hidden = !hasPhoto || !big;
-  if (hasPhoto) $('stickerPhoto').src = cropCanvas(400, Math.round(400 / cropAspect())).toDataURL('image/jpeg', 0.85);
   if (ticket) Object.assign(ticket, { tpl: currentTpl(), photoKind: hasPhoto ? crop.kind : null });
   $('tplNum').textContent = String(Number($('photoNum').textContent) + 1);
   applyLang();
@@ -489,10 +486,12 @@ const STR = {
   ja: { photoTitle: '写真もいれる？', photoSub: 'なくてもOK・保存されません', pickTxt: 'アルバムから', pickSub: 'スマホの写真をえらぶ',
         camTxt: 'いま撮る', camSub: 'カメラが開きます', cropBadge: '👆 ドラッグで位置を調整', changeTxt: '写真をかえる',
         tplTitle: 'シールのデザイン', tplSub: '韓国の伝統もよう',
+        speech: '韓国語だと、こうなります！', emptyTxt: '名前を入れると、ここにハングルが出てきます',
         cases: { none: ['🚫', '写真なし', '名前だけのシール'], portrait: ['🙂', '自分の写真', '顔・自撮り'], scene: ['🏞', '今日の写真', '体験・景色'] } },
   ko: { photoTitle: '사진도 넣을까요?', photoSub: '없어도 괜찮아요 · 저장되지 않아요', pickTxt: '앨범에서', pickSub: '휴대폰 사진 고르기',
         camTxt: '지금 찍기', camSub: '카메라가 열려요', cropBadge: '👆 드래그해서 위치 조정', changeTxt: '사진 바꾸기',
         tplTitle: '스티커 디자인', tplSub: '한국 전통 무늬',
+        speech: '일본어로 쓰면 이렇게 돼요!', emptyTxt: '이름을 입력하면 여기에 가타카나가 나와요',
         cases: { none: ['🚫', '사진 없음', '이름만 넣기'], portrait: ['🙂', '내 사진', '얼굴·셀카'], scene: ['🏞', '오늘의 사진', '체험·풍경'] } },
 };
 let uiLang = 'ja';
@@ -500,7 +499,7 @@ function applyLang() {
   const L = mode === 'ko' ? 'ko' : 'ja';
   if (L === uiLang && $('caseChips').children.length) return;
   uiLang = L;
-  for (const k of ['photoTitle', 'photoSub', 'pickTxt', 'pickSub', 'camTxt', 'camSub', 'cropBadge', 'changeTxt', 'tplTitle', 'tplSub']) $(k).textContent = STR[L][k];
+  for (const k of ['photoTitle', 'photoSub', 'pickTxt', 'pickSub', 'camTxt', 'camSub', 'cropBadge', 'changeTxt', 'tplTitle', 'tplSub', 'speech', 'emptyTxt']) $(k).textContent = STR[L][k];
   drawCaseChips(); tplCaseShown = '';
 }
 function drawCaseChips() {
@@ -541,6 +540,17 @@ function drawTplPreviews() {
     const c = b.querySelector('canvas'); c.width = 192; c.height = Math.round(192 * work.height / work.width);
     c.getContext('2d').drawImage(work, 0, 0, c.width, c.height);
   }
+  drawFinalCard();
+}
+// 최종 결과 화면: 고른 템플릿을 컬러로 크게 (사진도 컬러)
+function drawFinalCard() {
+  if (!ticket) return;
+  const photo = photoCase !== 'none' && crop.img ? cropCanvas(600, Math.round(600 / cropAspect())) : null;
+  renderLabelColor($('finalCard'), { ...ticket, photo, photoKind: photo ? crop.kind : null, date: Date.now() }, 2);
+  const t = TEMPLATES[currentTpl()];
+  $('finalTag').innerHTML = uiLang === 'ko'
+    ? `🎨 <b>${t.kr}</b> · 스티커는 흑백으로 인쇄돼요`
+    : `🎨 <b>${t.ja}</b> · シールは白黒で印刷されます`;
 }
 
 // ── 사진 (선택): 고르기·찍기 → 사진 종류에 맞는 비율로 자르기 ──
