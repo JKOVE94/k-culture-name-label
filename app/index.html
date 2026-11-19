@@ -315,10 +315,10 @@
 import { hiraganaToHangul, hangulToKatakana } from './convert.mjs';
 import { createReader } from './reading.mjs';
 import { splitKorean } from './input.mjs';
-import { renderKeepsake, saveCanvas } from './keepsake.mjs';
+import { saveCanvas } from './keepsake.mjs';
 import { encodePayload } from './payload.mjs';
 import { encodePhoto, photoChunks } from './photo-qr.mjs';
-import { renderLabel, PRINTERS, TEMPLATES, PHOTO_CASES, templatesFor, resolveTemplate, photoAspect, guessPhotoKind } from './label.mjs';
+import { renderLabelColor, TEMPLATES, PHOTO_CASES, templatesFor, resolveTemplate, photoAspect, guessPhotoKind } from './label.mjs';
 import qrcode from './vendor/qrcode.mjs';
 qrcode.stringToBytes = s => Array.from(new TextEncoder().encode(s));   // 한글·일본어를 UTF-8로
 
@@ -536,12 +536,10 @@ function drawTplPreviews() {
   const work = document.createElement('canvas'), tpl = currentTpl();
   for (const b of $('tpls').children) {
     b.classList.toggle('on', b.dataset.t === tpl);
-    renderLabel(work, { ...sample, tpl: b.dataset.t, photo, photoKind: photo ? crop.kind : null, no: 1, date: Date.now() }, PRINTERS.B1, '54x80', 'gray');
+    // 미리보기 = 저장될 컬러 카드와 같은 그림 (인쇄는 스태프 화면에서 흑백으로)
+    renderLabelColor(work, { ...sample, tpl: b.dataset.t, photo, photoKind: photo ? crop.kind : null, date: Date.now() }, 1);
     const c = b.querySelector('canvas'); c.width = 192; c.height = Math.round(192 * work.height / work.width);
-    const g = c.getContext('2d'); g.drawImage(work, 0, 0, c.width, c.height);
-    const img = g.getImageData(0, 0, c.width, c.height), d = img.data;
-    for (let i = 0; i < d.length; i += 4) { const t = d[i] / 255; d[i] = 59 + (255 - 59) * t; d[i + 1] = 47 + (250 - 47) * t; d[i + 2] = 58 + (244 - 58) * t; }
-    g.putImageData(img, 0, 0);
+    c.getContext('2d').drawImage(work, 0, 0, c.width, c.height);
   }
 }
 
@@ -638,8 +636,12 @@ async function openDone() {
 $('doneBack').onclick = () => { clearInterval(qrTimer); $('doneBg').classList.remove('open'); };
 $('imgBack').onclick = () => $('imgBg').classList.remove('open');
 $('saveCard').onclick = async () => {
-  const c = renderKeepsake(document.createElement('canvas'), { ...ticket, photo: photoCase !== 'none' && crop.img ? cropCanvas(900, Math.round(900 / cropAspect())) : null });
-  const r = await saveCanvas(c, 'hangul-name.png', url => { $('cardImg').src = url; $('imgBg').classList.add('open'); });
+  // 방문자가 고른 템플릿을 컬러로 저장 (인쇄는 같은 디자인의 흑백)
+  const photo = photoCase !== 'none' && crop.img ? cropCanvas(900, Math.round(900 / cropAspect())) : null;
+  const c = renderLabelColor(document.createElement('canvas'), { ...ticket, photo, photoKind: photo ? crop.kind : null, date: Date.now() }, 3);
+  const dev = new URLSearchParams(location.search).get('savepost');   // 개발용: 저장 이미지를 시험 서버로 보내 확인
+  if (dev) return c.toBlob(b => fetch('/' + dev, { method: 'POST', body: b }).then(() => toast('saved')));
+  const r = await saveCanvas(c, 'hangul-name-card.png', url => { $('cardImg').src = url; $('imgBg').classList.add('open'); });
   if (r === 'shared' || r === 'download') toast('保存できました！💖');
 };
 

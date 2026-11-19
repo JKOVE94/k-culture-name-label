@@ -66,7 +66,24 @@ export function labelPixels({ dpi, headPx }, mm = [50, 30]) {
 const FONT_KO = '"Apple SD Gothic Neo", "Noto Sans KR", "Noto Sans CJK KR", sans-serif';
 const FONT_JA = '"Hiragino Maru Gothic ProN", "Hiragino Sans", "Noto Sans JP", "Noto Sans CJK JP", sans-serif';
 
+// ── 컬러 모드 (방문자 폰 저장용). 인쇄는 흑백, 저장 이미지는 같은 디자인을 템플릿별 색으로 ──
+let COLOR = null;
+const K = () => COLOR?.ink ?? '#000';          // 선·글자
+const P = () => COLOR?.paper ?? '#fff';        // 바탕
+const ACC = key => COLOR?.[key] ?? K();        // 강조색 (배지·도장·하트·꽃술·매듭)
+const RAINBOW = ['#ff6f91', '#ffc75f', '#7fd8c3', '#8ec5ff', '#c3a6ff'];
+export const PALETTES = {
+  saekdong: { ink: '#3b2f3a', paper: '#fffaf3', badge: '#f0628f', heart: '#f0628f', accent: '#ffc75f', rainbow: RAINBOW,
+              patterns: { solid: '#ff6f91', diag: '#ffc75f', dots: '#7fd8c3', check: '#8ec5ff', vline: '#c3a6ff' } },
+  changsal: { ink: '#6b4226', paper: '#fdf6e9', badge: '#6b4226', heart: '#d94848', accent: '#d94848', rainbow: RAINBOW, patterns: {} },
+  idcard:   { ink: '#1f3a5f', paper: '#f6faff', badge: '#1f3a5f', heart: '#d6322f', accent: '#d6322f', seal: '#d6322f', rainbow: RAINBOW, patterns: {} },
+  bojagi:   { ink: '#3b2f3a', paper: '#fffaf3', badge: '#3b2f3a', heart: '#f0628f', accent: '#f0628f', knot: '#d94848', rainbow: RAINBOW,
+              patterns: { diag: '#ff8fb1', dots: '#ffd66b', check: '#7fd8c3', vline: '#8ec5ff', solid: '#c3a6ff' } },
+};
+PALETTES.passport = PALETTES.idcard; PALETTES.cert = { ...PALETTES.idcard, ink: '#2f5d3a', badge: '#2f5d3a' };
+
 function pattern(ctx, kind) {
+  if (COLOR) return COLOR.patterns?.[kind] ?? COLOR.ink;   // 컬러 모드: 무늬 대신 색
   const c = document.createElement('canvas'); c.width = c.height = 6;
   const p = c.getContext('2d'); p.fillStyle = '#fff'; p.fillRect(0, 0, 6, 6); p.fillStyle = '#000';
   if (kind === 'solid') p.fillRect(0, 0, 6, 6);
@@ -94,9 +111,9 @@ function flower(ctx, x, y, r) {
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
     ctx.beginPath(); ctx.arc(x + Math.cos(a) * r, y + Math.sin(a) * r, r * 0.75, 0, Math.PI * 2);
-    ctx.fillStyle = '#fff'; ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P(); ctx.fill(); ctx.stroke();
   }
-  ctx.beginPath(); ctx.arc(x, y, r * 0.5, 0, Math.PI * 2); ctx.fillStyle = '#000'; ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y, r * 0.5, 0, Math.PI * 2); ctx.fillStyle = ACC('accent'); ctx.fill();
 }
 function fitFont(ctx, text, family, max, min, width) {
   for (let s = max; s >= min; s -= 2) { ctx.font = `800 ${s}px ${family}`; if (ctx.measureText(text).width <= width) return s; }
@@ -151,6 +168,38 @@ export function renderLabel(canvas, data, printer = PRINTERS.B1_PRO, size = DEFA
 }
 
 // ── 사진 처리: 가운데 맞춰 채우기 → 밝기 범위 늘리기 → 회색 16단계 또는 Atkinson 디더링 ──
+// 방문자 폰 저장용 컬러 카드: 인쇄와 같은 템플릿·배치를 템플릿별 색으로 그리고, 사진도 컬러 그대로.
+// scale 3 → 1080×1728 (54×80 비율)
+export function renderLabelColor(canvas, data, scale = 3) {
+  const [BW, BH] = LABEL_SIZES[DEFAULT_SIZE].base;
+  const w = BW * scale, h = BH * scale;
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  const c = caseOf(data);
+  const kind = c === 'none' ? 'none' : c === 'portrait' ? 'portrait' : 'landscape';
+  const id = resolveTemplate(data.tpl, c);
+  const base = TEMPLATES[id].base;
+  COLOR = PALETTES[base] ?? PALETTES.saekdong;
+  let box;
+  try {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = COLOR.paper; ctx.fillRect(0, 0, w, h);
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.fillStyle = COLOR.ink; ctx.strokeStyle = COLOR.ink;
+    box = TEMPLATE_DRAW[base](ctx, data, kind);
+  } finally { COLOR = null; }
+  if (box && data.photo) {
+    const pw = data.photo.width, ph = data.photo.height, k = Math.max(box.w / pw, box.h / ph);
+    ctx.save(); ctx.beginPath(); ctx.rect(box.x, box.y, box.w, box.h); ctx.clip();
+    ctx.drawImage(data.photo, box.x + (box.w - pw * k) / 2, box.y + (box.h - ph * k) / 2, pw * k, ph * k);
+    ctx.restore();
+    ctx.lineWidth = 3; ctx.strokeStyle = (PALETTES[base] ?? PALETTES.saekdong).ink;
+    ctx.strokeRect(box.x - 1.5, box.y - 1.5, box.w + 3, box.h + 3);
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  return canvas;
+}
+
 function drawPhotoRegion(ctx, photo, x, y, w, h, mode) {
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const g = c.getContext('2d');
@@ -276,7 +325,7 @@ const txt = (d) => {
 };
 function drawName(ctx, d, y, maxW, maxSize, min = 26) {   // y = 이름 블록 세로 가운데, 반환 = 블록 아래 끝
   const big = d.big, fam = d.bigLang === 'ja' ? FONT_JA : FONT_KO;
-  ctx.textAlign = 'center'; ctx.fillStyle = '#000';
+  ctx.textAlign = 'center'; ctx.fillStyle = K();
   let size = fitFont(ctx, big, fam, maxSize, min, maxW);
   const cut = Math.max(big.lastIndexOf('・'), big.lastIndexOf(' '));
   if (size < maxSize * 0.66 && cut > 0) {
@@ -301,7 +350,7 @@ function drawSegs(ctx, segs, y, size = 22, cx = CX) {   // 원래 이름 + 후�
   ctx.font = `600 ${size}px ${FONT_JA}`;
   const widths = segs.map(x => ctx.measureText(x.text).width);
   let x = cx - widths.reduce((a, b) => a + b, 0) / 2;
-  ctx.textAlign = 'left'; ctx.fillStyle = '#000';
+  ctx.textAlign = 'left'; ctx.fillStyle = K();
   segs.forEach((sg, i) => {
     ctx.font = `600 ${size}px ${FONT_JA}`; ctx.fillText(sg.text, x, y);
     if (sg.rt) { ctx.font = `500 ${Math.round(size * 0.6)}px ${FONT_JA}`; ctx.textAlign = 'center'; ctx.fillText(sg.rt, x + widths[i] / 2, y - size - 2); ctx.textAlign = 'left'; }
@@ -315,9 +364,9 @@ function drawTiles(ctx, d, y, h = 78, maxW = 300, cx = CX) {   // 한글 글자 
   const gap = 8, tw = Math.min(h * 0.8, (maxW - gap * (chars.length - 1)) / chars.length);
   let tx = cx - (chars.length * tw + (chars.length - 1) * gap) / 2;
   for (const ch of chars) {
-    ctx.lineWidth = 3; ctx.strokeStyle = '#000'; ctx.fillStyle = '#fff';
+    ctx.lineWidth = 3; ctx.strokeStyle = K(); ctx.fillStyle = P();
     roundRect(ctx, tx, y, tw, h, 12); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#000'; ctx.textAlign = 'center';
+    ctx.fillStyle = K(); ctx.textAlign = 'center';
     ctx.font = `800 ${Math.round(Math.min(tw * 0.62, h * 0.5))}px ${FONT_KO}`; ctx.fillText(ch, tx + tw / 2, y + h * 0.56);
     ctx.font = `600 ${Math.round(h * 0.17)}px sans-serif`; ctx.fillText(roman(ch), tx + tw / 2, y + h * 0.86);
     tx += tw + gap;
@@ -325,7 +374,7 @@ function drawTiles(ctx, d, y, h = 78, maxW = 300, cx = CX) {   // 한글 글자 
   return y + h;
 }
 function drawDateNo(ctx, d, y, x0 = 30, x1 = W0 - 30) {
-  ctx.fillStyle = '#000'; ctx.fillRect(x0, y - 22, x1 - x0, 1.5);
+  ctx.fillStyle = K(); ctx.fillRect(x0, y - 22, x1 - x0, 1.5);
   ctx.font = `700 15px sans-serif`;
   ctx.textAlign = 'left'; ctx.fillText(fmtDate(d.date), x0, y);
   ctx.textAlign = 'right'; ctx.fillText(fmtNo(d.no), x1, y);
@@ -333,16 +382,16 @@ function drawDateNo(ctx, d, y, x0 = 30, x1 = W0 - 30) {
 }
 function drawMsg(ctx, d, y, size = 18, hearts = true) {
   const t = txt(d);
-  ctx.fillStyle = '#000'; ctx.textAlign = 'center'; ctx.font = `700 ${size}px ${t.msgFont}`;
+  ctx.fillStyle = K(); ctx.textAlign = 'center'; ctx.font = `700 ${size}px ${t.msgFont}`;
   ctx.fillText(t.msg, CX, y);
-  if (hearts) { const mw = ctx.measureText(t.msg).width / 2; heart(ctx, CX - mw - 16, y - size * 0.8, size * 0.7, true); heart(ctx, CX + mw + 16, y - size * 0.8, size * 0.7, true); }
+  if (hearts) { ctx.fillStyle = ACC('heart'); const mw = ctx.measureText(t.msg).width / 2; heart(ctx, CX - mw - 16, y - size * 0.8, size * 0.7, true); heart(ctx, CX + mw + 16, y - size * 0.8, size * 0.7, true); }
 }
 function badge(ctx, y, text = 'K-CULTURE 体験ブース', size = 15) {
   ctx.font = `800 ${size}px ${FONT_JA}`;
   const bw = ctx.measureText(text).width + size * 2;
-  ctx.fillStyle = '#000'; roundRect(ctx, CX - bw / 2, y, bw, size * 1.9, size * 0.95); ctx.fill();
-  ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(text, CX, y + size * 1.32);
-  ctx.fillStyle = '#000';
+  ctx.fillStyle = ACC('badge'); roundRect(ctx, CX - bw / 2, y, bw, size * 1.9, size * 0.95); ctx.fill();
+  ctx.fillStyle = P(); ctx.textAlign = 'center'; ctx.fillText(text, CX, y + size * 1.32);
+  ctx.fillStyle = K();
 }
 // 사진 칸 크기 맞추기: 정해진 영역 안에서 사진 비율대로 가운데 배치
 function fitBox(kind, x, y, w, h) {
@@ -359,11 +408,11 @@ function saekdongFrame(ctx, band = 22) {
   ctx.save(); roundRect(ctx, 6, 6, W0 - 12, H0 - 12, 26); ctx.clip();
   const kinds = ['solid', 'diag', 'dots', 'check', 'solid'], sh = band / kinds.length;
   kinds.forEach((k, i) => {
-    ctx.fillStyle = k === 'solid' ? '#000' : pattern(ctx, k);
+    ctx.fillStyle = COLOR ? COLOR.rainbow[i] : k === 'solid' ? K() : pattern(ctx, k);
     ctx.fillRect(6, 6 + i * sh, W0 - 12, sh - 1.2);
     ctx.fillRect(6, H0 - 6 - band + i * sh + 1.2, W0 - 12, sh - 1.2);
   });
-  ctx.fillStyle = '#000'; ctx.fillRect(6, 6 + band, W0 - 12, 2.5); ctx.fillRect(6, H0 - 8.5 - band, W0 - 12, 2.5);
+  ctx.fillStyle = K(); ctx.fillRect(6, 6 + band, W0 - 12, 2.5); ctx.fillRect(6, H0 - 8.5 - band, W0 - 12, 2.5);
   ctx.restore();
 }
 function tplSaekdong(ctx, d, kind) {
@@ -371,7 +420,7 @@ function tplSaekdong(ctx, d, kind) {
   if (kind === 'none') { drawPhotocard(ctx, d); return null; }   // 이름 중심 기본형
   saekdongFrame(ctx, 22);
   badge(ctx, 40, 'K-CULTURE 体験ブース', 14);
-  ctx.fillStyle = '#000'; flower(ctx, 34, 53, 8); flower(ctx, W0 - 34, 53, 8);
+  ctx.fillStyle = K(); flower(ctx, 34, 53, 8); flower(ctx, W0 - 34, 53, 8);
   const wrap = willWrap(ctx, d, W0 - 70, kind === 'portrait' ? 56 : 58) ? 44 : 0;
   if (kind === 'portrait') {
     const box = fitBox(kind, 30, 80, 300, 276 - wrap);
@@ -393,12 +442,12 @@ function latticeBand(ctx, x, y, w, h, t) {
   // 바깥 띠(두께 t)에 띠살·교살 느낌의 격자를 그린다
   ctx.save();
   ctx.beginPath(); ctx.rect(x, y, w, h); ctx.rect(x + t, y + t, w - 2 * t, h - 2 * t); ctx.clip('evenodd');
-  ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+  ctx.strokeStyle = K(); ctx.lineWidth = 2;
   const step = t / 2;
   for (let gx = x; gx <= x + w; gx += step) { ctx.beginPath(); ctx.moveTo(gx, y); ctx.lineTo(gx, y + h); ctx.stroke(); }
   for (let gy = y; gy <= y + h; gy += step) { ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x + w, gy); ctx.stroke(); }
   // 칸마다 작은 마름모 (亞자살 느낌)
-  ctx.fillStyle = '#000';
+  ctx.fillStyle = K();
   for (let gx = x + step / 2; gx < x + w; gx += step) for (let gy = y + step / 2; gy < y + h; gy += step) {
     ctx.beginPath(); ctx.moveTo(gx, gy - 2.5); ctx.lineTo(gx + 2.5, gy); ctx.lineTo(gx, gy + 2.5); ctx.lineTo(gx - 2.5, gy); ctx.fill();
   }
@@ -406,7 +455,7 @@ function latticeBand(ctx, x, y, w, h, t) {
   ctx.lineWidth = 4; ctx.strokeRect(x, y, w, h); ctx.lineWidth = 2.5; ctx.strokeRect(x + t, y + t, w - 2 * t, h - 2 * t);
 }
 function windowCorners(ctx, b, off = 7, len = 18) {   // 사진 둘레 ㄱ자 문틀 모서리
-  ctx.lineWidth = 4; ctx.strokeStyle = '#000';
+  ctx.lineWidth = 4; ctx.strokeStyle = K();
   const L = b.x - off, T = b.y - off, R = b.x + b.w + off, B = b.y + b.h + off;
   for (const [x, y, dx, dy] of [[L, T, 1, 1], [R, T, -1, 1], [L, B, 1, -1], [R, B, -1, -1]]) {
     ctx.beginPath(); ctx.moveTo(x + dx * len, y); ctx.lineTo(x, y); ctx.lineTo(x, y + dy * len); ctx.stroke();
@@ -415,9 +464,9 @@ function windowCorners(ctx, b, off = 7, len = 18) {   // 사진 둘레 ㄱ자 �
 function plaque(ctx, y, text = 'K-CULTURE 体験ブース') {   // 현판 모양 이름판
   ctx.font = `800 15px ${FONT_JA}`;
   const w = ctx.measureText(text).width + 34, x = CX - w / 2;
-  ctx.fillStyle = '#000'; ctx.fillRect(x, y, w, 28);
+  ctx.fillStyle = K(); ctx.fillRect(x, y, w, 28);
   ctx.fillRect(x - 8, y + 4, 8, 20); ctx.fillRect(x + w, y + 4, 8, 20);
-  ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(text, CX, y + 20); ctx.fillStyle = '#000';
+  ctx.fillStyle = P(); ctx.textAlign = 'center'; ctx.fillText(text, CX, y + 20); ctx.fillStyle = K();
 }
 function tplChangsal(ctx, d, kind) {
   const t = txt(d);
@@ -431,11 +480,11 @@ function tplChangsal(ctx, d, kind) {
     for (let i = -r; i <= r; i += 16) { ctx.beginPath(); ctx.moveTo(CX + i, cy - r); ctx.lineTo(CX + i, cy + r); ctx.stroke(); ctx.beginPath(); ctx.moveTo(CX - r, cy + i); ctx.lineTo(CX + r, cy + i); ctx.stroke(); }
     ctx.restore();
     ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(CX, cy, r, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(CX, cy, r * 0.62, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = P(); ctx.beginPath(); ctx.arc(CX, cy, r * 0.62, 0, Math.PI * 2); ctx.fill();
     ctx.lineWidth = 3; ctx.stroke();
     // 일본인 카드는 한글 첫 글자(+로마자), 한국인 카드는 가타카나 첫 글자
     const first = d.bigLang === 'ja' ? [...d.big][0] : ([...hangulName(d)][0] ?? '한');
-    ctx.fillStyle = '#000'; ctx.textAlign = 'center'; ctx.font = `800 70px ${d.bigLang === 'ja' ? FONT_JA : FONT_KO}`; ctx.fillText(first, CX, cy + 22);
+    ctx.fillStyle = K(); ctx.textAlign = 'center'; ctx.font = `800 70px ${d.bigLang === 'ja' ? FONT_JA : FONT_KO}`; ctx.fillText(first, CX, cy + 22);
     ctx.font = `600 14px sans-serif`; ctx.fillText(roman(first), CX, cy + 44);
     const ny = drawName(ctx, d, 318, W0 - 76, 60);
     drawSegs(ctx, d.segs, Math.max(segsY(ny, 21, d.segs), 392), 21);
@@ -458,9 +507,9 @@ function tplChangsal(ctx, d, kind) {
 // ── 3. 한글 이름 증명서: 신분증 형식 + 도장 ──
 function seal(ctx, x, y, r, rot = -0.2, lines = ['한글이름', '발급완료']) {
   ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
-  ctx.strokeStyle = '#000'; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = ACC('seal'); ctx.lineWidth = 3.5; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
   ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, r - 6, 0, Math.PI * 2); ctx.stroke();
-  ctx.fillStyle = '#000'; ctx.textAlign = 'center';
+  ctx.fillStyle = ACC('seal'); ctx.textAlign = 'center';
   ctx.font = `800 ${Math.round(r * 0.36)}px ${FONT_KO}`; ctx.fillText(lines[0], 0, -r * 0.08);
   ctx.fillText(lines[1], 0, r * 0.38);
   heart(ctx, 0, -r * 0.72, r * 0.2, true);
@@ -476,11 +525,11 @@ function fields(ctx, d, x, y, w, rowH = 30) {
     ['No.', d.no ? String(d.no).padStart(3, '0') : '-', 'sans-serif', 700],
   ];
   const lw = 86;
-  ctx.lineWidth = 1.5; ctx.strokeStyle = '#000';
+  ctx.lineWidth = 1.5; ctx.strokeStyle = K();
   rows.forEach(([label, value, font, weight], i) => {
     const ry = y + i * rowH;
     ctx.beginPath(); ctx.moveTo(x, ry + rowH); ctx.lineTo(x + w, ry + rowH); ctx.stroke();
-    ctx.textAlign = 'left'; ctx.fillStyle = '#000';
+    ctx.textAlign = 'left'; ctx.fillStyle = K();
     ctx.font = `700 12px ${FONT_KO}`; ctx.fillText(label, x + 2, ry + rowH * 0.62);
     const maxW = w - lw - 4;
     let size = 18; ctx.font = `${weight} ${size}px ${font}`;
@@ -491,7 +540,7 @@ function fields(ctx, d, x, y, w, rowH = 30) {
   return y + rows.length * rowH;
 }
 function mrz(ctx, d, y) {   // 여권 아래 기계판독줄 흉내
-  ctx.fillStyle = '#000'; ctx.fillRect(20, y - 22, W0 - 40, 2); ctx.fillRect(20, y - 18, W0 - 40, 1);
+  ctx.fillStyle = K(); ctx.fillRect(20, y - 22, W0 - 40, 2); ctx.fillRect(20, y - 18, W0 - 40, 1);
   ctx.font = `700 12px monospace`; ctx.textAlign = 'center';
   ctx.fillText(`<<${d.bigLang === 'ja' ? 'KATAKANA' : 'HANGUL'}<<NAME<<CARD<<${d.no ? String(d.no).padStart(3, '0') : '000'}<<K-CULTURE<<`, CX, y);
 }
@@ -503,12 +552,12 @@ function tplIdcard(ctx, d, kind, o = {}) {
   const sealLines = (kr ? o.sealKr : null) ?? o.seal ?? (kr ? ['일본이름', '발급완료'] : ['한글이름', '발급완료']);
   ctx.lineWidth = 4; roundRect(ctx, 6, 6, W0 - 12, H0 - 12, 20); ctx.stroke();
   ctx.save(); roundRect(ctx, 6, 6, W0 - 12, H0 - 12, 20); ctx.clip();
-  ctx.fillStyle = '#000'; ctx.fillRect(6, 6, W0 - 12, 56);
+  ctx.fillStyle = K(); ctx.fillRect(6, 6, W0 - 12, 56);
   ctx.restore();
-  ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+  ctx.fillStyle = P(); ctx.textAlign = 'center';
   ctx.font = `800 22px ${FONT_KO}`; ctx.fillText(title, CX, 34);
   ctx.font = `700 11px sans-serif`; ctx.fillText(sub, CX, 52);
-  ctx.fillStyle = '#000';
+  ctx.fillStyle = K();
   let box = null, y;
   if (kind === 'portrait') {
     box = fitBox(kind, 20, 74, 128, 141);
@@ -539,8 +588,8 @@ function bojagiFrame(ctx, t = 26) {
   let k = 0;
   const patch = (x, y, w, h) => {
     const kind = kinds[k++ % kinds.length];
-    ctx.fillStyle = kind === 'solid' ? '#000' : pattern(ctx, kind); ctx.fillRect(x, y, w, h);
-    ctx.lineWidth = 2.5; ctx.strokeStyle = '#000'; ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = kind === 'solid' && !COLOR ? K() : pattern(ctx, kind); ctx.fillRect(x, y, w, h);
+    ctx.lineWidth = 2.5; ctx.strokeStyle = K(); ctx.strokeRect(x, y, w, h);
   };
   ctx.save(); roundRect(ctx, 6, 6, W0 - 12, H0 - 12, 14); ctx.clip();
   // 위·아래
@@ -548,12 +597,12 @@ function bojagiFrame(ctx, t = 26) {
   // 좌·우
   for (const xx of [6, W0 - 6 - t]) { let y = 6 + t; for (const h of [110, 70, 130, 90, 124]) { const hh = Math.min(h, H0 - 6 - t - y); if (hh > 0) patch(xx, y, t, hh); y += h; } }
   ctx.restore();
-  ctx.lineWidth = 4; ctx.strokeStyle = '#000'; roundRect(ctx, 6, 6, W0 - 12, H0 - 12, 14); ctx.stroke();
+  ctx.lineWidth = 4; ctx.strokeStyle = K(); roundRect(ctx, 6, 6, W0 - 12, H0 - 12, 14); ctx.stroke();
   ctx.lineWidth = 2; ctx.strokeRect(6 + t + 4, 6 + t + 4, W0 - 2 * (6 + t + 4), H0 - 2 * (6 + t + 4));   // 바느질 선 느낌의 안쪽 선
   ctx.setLineDash([4, 4]); ctx.strokeRect(6 + t + 9, 6 + t + 9, W0 - 2 * (6 + t + 9), H0 - 2 * (6 + t + 9)); ctx.setLineDash([]);
 }
 function knot(ctx, x, y, s = 1) {   // 매듭(동심결) 작은 장식
-  ctx.lineWidth = 2.5; ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2.5; ctx.strokeStyle = ACC('knot');
   for (const [dx, dy] of [[-6, 0], [6, 0], [0, -6], [0, 6]]) { ctx.beginPath(); ctx.arc(x + dx * s, y + dy * s, 5 * s, 0, Math.PI * 2); ctx.stroke(); }
   ctx.beginPath(); ctx.moveTo(x - 3 * s, y + 10 * s); ctx.lineTo(x - 5 * s, y + 26 * s); ctx.moveTo(x, y + 10 * s); ctx.lineTo(x, y + 28 * s); ctx.moveTo(x + 3 * s, y + 10 * s); ctx.lineTo(x + 5 * s, y + 26 * s); ctx.stroke();
 }
@@ -563,10 +612,10 @@ function tplBojagi(ctx, d, kind) {
   // 천에 박음질한 이름표 느낌의 태그 (색동·배지와 구별)
   ctx.font = `800 15px ${FONT_JA}`;
   const tag = 'K-CULTURE 体験ブース', tw = ctx.measureText(tag).width + 30;
-  ctx.fillStyle = '#fff'; ctx.fillRect(CX - tw / 2, 46, tw, 30);
-  ctx.lineWidth = 2.5; ctx.strokeStyle = '#000'; ctx.strokeRect(CX - tw / 2, 46, tw, 30);
+  ctx.fillStyle = P(); ctx.fillRect(CX - tw / 2, 46, tw, 30);
+  ctx.lineWidth = 2.5; ctx.strokeStyle = K(); ctx.strokeRect(CX - tw / 2, 46, tw, 30);
   ctx.setLineDash([3, 3]); ctx.strokeRect(CX - tw / 2 + 4, 50, tw - 8, 22); ctx.setLineDash([]);
-  ctx.fillStyle = '#000'; ctx.textAlign = 'center'; ctx.fillText(tag, CX, 67);
+  ctx.fillStyle = K(); ctx.textAlign = 'center'; ctx.fillText(tag, CX, 67);
   knot(ctx, 58, 56, 0.85); knot(ctx, W0 - 58, 56, 0.85);
   if (kind === 'none') {
     ctx.font = `700 19px ${t.forJa ? FONT_KO : FONT_JA}`; ctx.textAlign = 'center'; ctx.fillText(t.greet, CX, 130);
@@ -609,23 +658,23 @@ function drawPhotocard(ctx, d) {
   ctx.lineWidth = 4; roundRect(ctx, 6, 6, W - 12, H - 12, 26); ctx.stroke();
   ctx.save(); roundRect(ctx, 6, 6, W - 12, H - 12, 26); ctx.clip();
   const kinds = ['solid', 'diag', 'dots', 'vline', 'check'], bw = (W - 12) / kinds.length;
-  kinds.forEach((k, i) => { ctx.fillStyle = pattern(ctx, k); ctx.fillRect(6 + i * bw, 6, bw + 1, 22); });
-  [...kinds].reverse().forEach((k, i) => { ctx.fillStyle = pattern(ctx, k); ctx.fillRect(6 + i * bw, H - 28, bw + 1, 22); });
-  ctx.fillStyle = '#000'; ctx.fillRect(6, 28, W - 12, 3); ctx.fillRect(6, H - 31, W - 12, 3);
+  kinds.forEach((k, i) => { ctx.fillStyle = COLOR ? COLOR.rainbow[i] : pattern(ctx, k); ctx.fillRect(6 + i * bw, 6, bw + 1, 22); });
+  [...kinds].reverse().forEach((k, i) => { ctx.fillStyle = COLOR ? COLOR.rainbow[4 - i] : pattern(ctx, k); ctx.fillRect(6 + i * bw, H - 28, bw + 1, 22); });
+  ctx.fillStyle = K(); ctx.fillRect(6, 28, W - 12, 3); ctx.fillRect(6, H - 31, W - 12, 3);
   ctx.restore();
 
   // 뱃지: K-CULTURE 体験ブース (검정 알약 + 흰 글씨)
   ctx.font = `800 16px ${FONT_JA}`;
   const badge = 'K-CULTURE 体験ブース', bwid = ctx.measureText(badge).width + 34;
-  ctx.fillStyle = '#000'; roundRect(ctx, cx - bwid / 2, 46, bwid, 30, 15); ctx.fill();
-  ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(badge, cx, 67);
+  ctx.fillStyle = ACC('badge'); roundRect(ctx, cx - bwid / 2, 46, bwid, 30, 15); ctx.fill();
+  ctx.fillStyle = P(); ctx.textAlign = 'center'; ctx.fillText(badge, cx, 67);
 
   // 장식
-  ctx.fillStyle = '#000'; ctx.strokeStyle = '#000';
+  ctx.fillStyle = K(); ctx.strokeStyle = K();
   flower(ctx, 34, 62, 9); flower(ctx, W - 34, 62, 9);
 
   // 인사말
-  ctx.fillStyle = '#000'; ctx.font = `700 20px ${forJa ? FONT_KO : FONT_JA}`; ctx.fillText(greeting, cx, 112);
+  ctx.fillStyle = K(); ctx.font = `700 20px ${forJa ? FONT_KO : FONT_JA}`; ctx.fillText(greeting, cx, 112);
 
   // 큰 이름 (영역 y 128~232, 길면 두 줄)
   const fam = bigLang === 'ja' ? FONT_JA : FONT_KO;
@@ -661,9 +710,9 @@ function drawPhotocard(ctx, d) {
     const total = chars.length * tw + (chars.length - 1) * gap;
     let tx = cx - total / 2;
     for (const ch of chars) {
-      ctx.lineWidth = 3; ctx.strokeStyle = '#000'; ctx.fillStyle = '#fff';
+      ctx.lineWidth = 3; ctx.strokeStyle = K(); ctx.fillStyle = P();
       roundRect(ctx, tx, 318, tw, th, 12); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = '#000'; ctx.font = `800 ${tw > 50 ? 38 : 32}px ${FONT_KO}`; ctx.fillText(ch, tx + tw / 2, 362);
+      ctx.fillStyle = K(); ctx.font = `800 ${tw > 50 ? 38 : 32}px ${FONT_KO}`; ctx.fillText(ch, tx + tw / 2, 362);
       ctx.font = `600 13px sans-serif`; ctx.fillText(roman(ch), tx + tw / 2, 384);
       tx += tw + gap;
     }
