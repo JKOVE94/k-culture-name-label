@@ -21,6 +21,7 @@
     --round: "Hiragino Maru Gothic ProN", "Hiragino Maru Gothic Pro", "Apple SD Gothic Neo", "Hiragino Sans", sans-serif;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
   html, body { margin: 0; background: var(--cream); color: var(--ink); font-family: var(--round); }
   body {
     background-image: radial-gradient(#ffd9e4 1.2px, transparent 1.2px);
@@ -115,7 +116,7 @@
   .done-note { font-size: 14px; color: var(--sub); margin-top: 16px; }
   .num.n4 { background: var(--yellow); }
   .num.n5 { background: var(--lav); }
-  .tpl-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .tpl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .tpl { border: 2px solid var(--ink); border-radius: 14px; background: #fff; padding: 6px 4px 6px; font-family: var(--round); font-size: 11px; color: var(--ink); box-shadow: 2px 2px 0 var(--ink); }
   .tpl canvas { width: 100%; height: auto; display: block; border-radius: 8px; margin-bottom: 4px; }
   .tpl.on { background: var(--yellow); box-shadow: 0 0 0 3px var(--pink-d); }
@@ -191,15 +192,14 @@
 
   <section class="step" id="photoStep">
     <div class="step-head"><span class="num n4" id="photoNum">3</span>写真もいれる？ <small>なくてもOK・保存されません</small></div>
-    <div class="chips">
+    <div class="chips" id="caseChips"></div>
+    <div class="chips" id="pickRow" style="margin-top:10px" hidden>
       <button class="chip" id="pickBtn">🖼 写真をえらぶ</button>
       <button class="chip" id="camBtn">🤳 その場で撮る</button>
-      <button class="chip ghost" id="noPhotoBtn" hidden>写真なしにする</button>
     </div>
     <input type="file" id="pickInput" accept="image/*" hidden>
     <input type="file" id="camInput" accept="image/*" capture="user" hidden>
     <div class="crop-wrap" id="cropWrap" hidden>
-      <div class="chips" id="kind" style="margin-bottom:8px"></div>
       <canvas id="crop" width="500" height="550"></canvas>
       <div class="tip">指でドラッグして位置、スライダーで大きさを調整してね</div>
       <input type="range" id="zoom" min="1" max="3" step="0.01" value="1">
@@ -277,7 +277,7 @@ import { splitKorean } from './input.mjs';
 import { renderKeepsake, saveCanvas } from './keepsake.mjs';
 import { encodePayload } from './payload.mjs';
 import { encodePhoto, photoChunks } from './photo-qr.mjs';
-import { renderLabel, PRINTERS, TEMPLATES, PHOTO_KINDS, photoAspect, guessPhotoKind } from './label.mjs';
+import { renderLabel, PRINTERS, TEMPLATES, PHOTO_CASES, templatesFor, resolveTemplate, photoAspect, guessPhotoKind } from './label.mjs';
 import qrcode from './vendor/qrcode.mjs';
 qrcode.stringToBytes = s => Array.from(new TextEncoder().encode(s));   // 한글·일본어를 UTF-8로
 
@@ -411,10 +411,10 @@ function render() {
       ? [...runsInfo.filter(i => i.run.trim()).map(i => i.type === 'kanji' ? { text: i.run, rt: i.reading } : { text: i.run }), ...(ja ? [{ text: ja }] : [])]
       : [{ text: nameEl.value.trim() }],
   };
-  const hasPhoto = !!crop.img;
+  const hasPhoto = photoCase !== 'none' && !!crop.img;
   $('stickerPhoto').hidden = !hasPhoto || !big;
   if (hasPhoto) $('stickerPhoto').src = cropCanvas(400, Math.round(400 / cropAspect())).toDataURL('image/jpeg', 0.85);
-  if (ticket) Object.assign(ticket, { tpl, photoKind: hasPhoto ? crop.kind : null });
+  if (ticket) Object.assign(ticket, { tpl: currentTpl(), photoKind: hasPhoto ? crop.kind : null });
   $('tplNum').textContent = String(Number($('photoNum').textContent) + 1);
   queueTplPreviews();
 }
@@ -422,16 +422,29 @@ let ticket = null;
 
 // ── 포카 디자인 고르기: 지금 이름·사진으로 4가지 템플릿을 작게 그려 보여 준다 ──
 // (인쇄용 흑백 그대로가 아니라 먹색·크림색으로 물들여 보여 준다)
-let tpl = localStorage.getItem('nl-tpl') || 'saekdong';
-if (!TEMPLATES[tpl]) tpl = 'saekdong';
-$('tpls').innerHTML = Object.entries(TEMPLATES).map(([k, v]) => `<button class="tpl" data-t="${k}"><canvas></canvas><b>${v.ko}</b>${v.ja}</button>`).join('');
-$('tpls').onclick = e => { const b = e.target.closest('.tpl'); if (!b) return; tpl = b.dataset.t; localStorage.setItem('nl-tpl', tpl); render(); };
+// 사진 케이스: none(사진 없음, 기본) / portrait(인물) / scene(활동·풍경). 케이스마다 템플릿 3종
+let photoCase = 'none';
+const tplByCase = JSON.parse(localStorage.getItem('nl-tpl-case') || '{}');
+const currentTpl = () => resolveTemplate(tplByCase[photoCase], photoCase);
+let tplCaseShown = '';
+function buildTplButtons() {
+  if (tplCaseShown === photoCase) return;
+  tplCaseShown = photoCase;
+  $('tpls').innerHTML = templatesFor(photoCase).map(k => `<button class="tpl" data-t="${k}"><canvas></canvas><b>${TEMPLATES[k].ko}</b>${TEMPLATES[k].ja}</button>`).join('');
+}
+$('tpls').onclick = e => { const b = e.target.closest('.tpl'); if (!b) return; tplByCase[photoCase] = b.dataset.t; localStorage.setItem('nl-tpl-case', JSON.stringify(tplByCase)); render(); };
 let tplTimer = 0;
 function queueTplPreviews() { clearTimeout(tplTimer); tplTimer = setTimeout(drawTplPreviews, 250); }
 function drawTplPreviews() {
+  buildTplButtons();
   const sample = ticket ?? { big: '다나카 상', segs: [{ text: '田中', rt: 'たなか' }, { text: 'さん' }], bigLang: 'ko', hon: 'san' };
-  const photo = crop.img ? cropCanvas(240, Math.round(240 / cropAspect())) : null;
-  const work = document.createElement('canvas');
+  // 사진 케이스인데 아직 사진을 안 골랐으면 회색 칸으로 모양만 보여 준다
+  let photo = null;
+  if (photoCase !== 'none') {
+    photo = crop.img ? cropCanvas(240, Math.round(240 / cropAspect())) : Object.assign(document.createElement('canvas'), { width: 240, height: Math.round(240 / cropAspect()) });
+    if (!crop.img) { const g = photo.getContext('2d'); g.fillStyle = '#bbb'; g.fillRect(0, 0, photo.width, photo.height); }
+  }
+  const work = document.createElement('canvas'), tpl = currentTpl();
   for (const b of $('tpls').children) {
     b.classList.toggle('on', b.dataset.t === tpl);
     renderLabel(work, { ...sample, tpl: b.dataset.t, photo, photoKind: photo ? crop.kind : null, no: 1, date: Date.now() }, PRINTERS.B1, '54x80', 'gray');
@@ -469,25 +482,26 @@ async function setPhoto(file) {
   } catch {
     const img = new Image(); img.src = URL.createObjectURL(file); await img.decode(); crop.img = img;
   }
-  Object.assign(crop, { zoom: 1, x: 0, y: 0, kind: guessPhotoKind(crop.img) }); $('zoom').value = 1;
-  setKind(crop.kind);
-  $('cropWrap').hidden = false; $('noPhotoBtn').hidden = false;
+  Object.assign(crop, { zoom: 1, x: 0, y: 0 }); $('zoom').value = 1;
+  // 케이스를 고르지 않고 사진부터 넣었으면 사진 비율로 짐작 (세로 → 인물, 가로 → 활동·풍경)
+  setCase(photoCase === 'none' ? (guessPhotoKind(crop.img) === 'portrait' ? 'portrait' : 'scene') : photoCase);
+}
+// 사진 케이스 고르기: 케이스에 따라 자르기 비율(인물 10:11, 활동·풍경 16:10)과 템플릿 3종이 바뀐다
+function setCase(c) {
+  photoCase = c;
+  crop.kind = c === 'portrait' ? 'portrait' : 'landscape';
+  $('caseChips').innerHTML = Object.entries(PHOTO_CASES).map(([k, v]) => `<button class="chip ${k === c ? 'on' : ''}" data-c="${k}">${k === 'none' ? '🚫 ' : k === 'portrait' ? '🙂 ' : '🏞 '}${v.ja}</button>`).join('');
+  $('pickRow').hidden = c === 'none';
+  $('cropWrap').hidden = c === 'none' || !crop.img;
+  const cv = $('crop'); cv.width = 500; cv.height = Math.round(500 / cropAspect());
+  Object.assign(crop, { x: 0, y: 0 });
   drawCrop(); render();
 }
-// 사진 종류(인물/풍경): 자동으로 고르고, 바꿀 수도 있다. 종류에 따라 자르기 비율과 포카 디자인이 달라진다
-function setKind(kind) {
-  crop.kind = kind;
-  $('kind').innerHTML = Object.entries(PHOTO_KINDS).map(([k, v]) => `<button class="chip ${k === kind ? 'on' : ''}" data-k="${k}">${v.ja}</button>`).join('');
-  const c = $('crop'); c.width = 500; c.height = Math.round(500 / cropAspect());
-  Object.assign(crop, { x: 0, y: 0 });
-  drawCrop();
-}
-$('kind').onclick = e => { const k = e.target.closest('button')?.dataset.k; if (k) { setKind(k); render(); } };
+$('caseChips').onclick = e => { const c = e.target.closest('button')?.dataset.c; if (c) setCase(c); };
 $('pickBtn').onclick = () => $('pickInput').click();
 $('camBtn').onclick = () => $('camInput').click();
 $('pickInput').onchange = e => { setPhoto(e.target.files[0]); e.target.value = ''; };
 $('camInput').onchange = e => { setPhoto(e.target.files[0]); e.target.value = ''; };
-$('noPhotoBtn').onclick = () => { crop.img = null; $('cropWrap').hidden = true; $('noPhotoBtn').hidden = true; render(); };
 $('zoom').oninput = () => { crop.zoom = +$('zoom').value; drawCrop(); };
 $('zoom').onchange = render;
 {
@@ -517,7 +531,7 @@ async function openDone() {
   if (!ticket) return;
   clearInterval(qrTimer);
   let frames;
-  if (crop.img) {
+  if (photoCase !== 'none' && crop.img) {
     const id = Math.random().toString(36).slice(2, 8);
     const [ew, eh] = crop.kind === 'landscape' ? [240, 150] : [200, 220];
     const chunks = photoChunks(id, await encodePhoto(cropCanvas(ew * 2, eh * 2), { width: ew, height: eh }));
@@ -534,7 +548,7 @@ async function openDone() {
 $('doneBack').onclick = () => { clearInterval(qrTimer); $('doneBg').classList.remove('open'); };
 $('imgBack').onclick = () => $('imgBg').classList.remove('open');
 $('saveCard').onclick = async () => {
-  const c = renderKeepsake(document.createElement('canvas'), { ...ticket, photo: crop.img ? cropCanvas(900, Math.round(900 / cropAspect())) : null });
+  const c = renderKeepsake(document.createElement('canvas'), { ...ticket, photo: photoCase !== 'none' && crop.img ? cropCanvas(900, Math.round(900 / cropAspect())) : null });
   const r = await saveCanvas(c, 'hangul-name.png', url => { $('cardImg').src = url; $('imgBg').classList.add('open'); });
   if (r === 'shared' || r === 'download') toast('保存できました！💖');
 };
@@ -567,6 +581,7 @@ if (q) { nameEl.value = q; refresh(); }
 { const f = new URLSearchParams(location.search).get('focus'); if (f) for (const el of document.querySelectorAll('main > *')) if (el.id !== f) el.style.display = 'none'; }
 // 시험용: ?photo=사진주소 로 열면 그 사진을 고른 것처럼
 { const ph = new URLSearchParams(location.search).get('photo'); if (ph) fetch(ph).then(r => r.blob()).then(setPhoto); }
+setCase('none');
 render();
 
 // ── 오프라인(PWA) ──

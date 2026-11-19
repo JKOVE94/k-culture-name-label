@@ -4,9 +4,9 @@
 <body>
 <canvas id="b"></canvas>
 <script type="module">
-// 회의용 비교 보드: 템플릿 4종 × (사진 없음 / 인물 / 풍경) 12장을 한 장의 이미지로
+// 회의용 비교 보드: 사진 케이스 3가지(인물 / 활동·풍경 / 사진 없음) × 케이스별 템플릿 3종 = 9장
 // ?mode=dither 디더링, ?lang=ja 한국인 카드, ?save=파일이름 이면 서버로 PNG 전송(개발용)
-import { renderLabel, PRINTERS, TEMPLATES } from './label.mjs';
+import { renderLabel, PRINTERS, TEMPLATES, PHOTO_CASES, templatesFor } from './label.mjs';
 await document.fonts.ready;
 const q = new URLSearchParams(location.search);
 const load = async src => { const i = new Image(); i.src = src; await i.decode(); return i; };
@@ -14,27 +14,29 @@ const P = await load(q.get('p') || './sample-test.jpg'), L = await load(q.get('l
 const d = q.get('lang') === 'ja'
   ? { big: 'キム・ミンジュンさん', segs: [{ text: '김민준' }], bigLang: 'ja', hon: 'san', no: 7 }
   : { big: '다나카 상', segs: [{ text: '田中', rt: 'たなか' }, { text: 'さん' }], bigLang: 'ko', hon: 'san', no: 42 };
-const kinds = [['none', null, '사진 없음'], ['portrait', P, '인물 사진'], ['landscape', L, '풍경 사진']];
-const tpls = Object.keys(TEMPLATES);
-const cw = 340, ch = Math.round(cw * 945 / 567), gap = 36, left = 150, top = 150;
+const kinds = [['portrait', P, '1-1 인물 사진'], ['scene', L, '1-2 활동·풍경'], ['none', null, '2 사진 없음']];
+const tpls = [0, 1, 2];
+const cw = 360, ch = Math.round(cw * 945 / 567), gap = 60, left = 150, top = 150;
 const b = document.getElementById('b');
 b.width = left + tpls.length * (cw + gap); b.height = top + kinds.length * (ch + gap) + 20;
 const g = b.getContext('2d');
 g.fillStyle = '#fff6ee'; g.fillRect(0, 0, b.width, b.height);
 ['#ff6f91', '#ffc75f', '#7fd8c3', '#8ec5ff', '#c3a6ff'].forEach((c, i) => { g.fillStyle = c; g.fillRect(i * b.width / 5, 0, b.width / 5 + 1, 16); });
 g.fillStyle = '#3b2f3a'; g.font = '800 46px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
-g.fillText(`이름 포토카드 템플릿 (54×80 흑백 감열, 사진 ${q.get('mode') === 'dither' ? '디더링' : '회색조'})`, 40, 76);
+g.fillText(`이름 포토카드 템플릿 9종 (54×80 흑백 감열, 사진 ${q.get('mode') === 'dither' ? '디더링' : '회색조'})`, 40, 76);
 g.font = '700 30px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
-tpls.forEach((t, i) => g.fillText(`${TEMPLATES[t].ko}`, left + i * (cw + gap), 132));
+tpls.forEach((t, i) => g.fillText(`템플릿 ${i + 1}`, left + i * (cw + gap), 132));
 const work = document.createElement('canvas');
 kinds.forEach(([kind, photo, label], r) => {
   const y = top + r * (ch + gap);
   g.save(); g.translate(60, y + ch / 2); g.rotate(-Math.PI / 2); g.textAlign = 'center'; g.fillStyle = '#3b2f3a'; g.fillText(label, 0, 0); g.restore();
-  tpls.forEach((t, i) => {
-    renderLabel(work, { ...d, tpl: t, photo, photoKind: photo ? kind : undefined, date: Date.parse('2027-01-10T03:00:00Z') }, PRINTERS.B1_PRO, '54x80', q.get('mode') || 'gray');
+  templatesFor(kind).forEach((t, i) => {
+    renderLabel(work, { ...d, tpl: t, photo, photoKind: photo ? (kind === 'portrait' ? 'portrait' : 'landscape') : undefined, date: Date.parse('2027-01-10T03:00:00Z') }, PRINTERS.B1_PRO, '54x80', q.get('mode') || 'gray');
     const x = left + i * (cw + gap);
     g.fillStyle = '#d9cfc8'; g.fillRect(x + 6, y + 6, cw, ch);
     g.drawImage(work, x, y, cw, ch);
+    g.fillStyle = '#3b2f3a'; g.font = '700 22px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'; g.textAlign = 'left';
+    g.fillText(TEMPLATES[t].ko, x, y + ch + 26);
   });
 });
 if (q.get('save')) b.toBlob(blob => fetch('/' + q.get('save'), { method: 'POST', body: blob }).then(() => { document.title = 'saved'; }));

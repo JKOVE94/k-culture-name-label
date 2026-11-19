@@ -1,11 +1,16 @@
-import { renderLabel as drawLabel, PRINTERS, LABEL_SIZES, DEFAULT_SIZE, TEMPLATES } from '../label.mjs';
+import { renderLabel as drawLabel, PRINTERS, LABEL_SIZES, DEFAULT_SIZE, TEMPLATES, PHOTO_CASES, templatesFor, caseOf } from '../label.mjs';
 // 라벨 크기: 50×80 포토카드(기본) / 50×30 이름표. 고른 값은 이 폰에 기억한다
 let labelSize = localStorage.getItem('nl-label-size') || DEFAULT_SIZE;
 if (!LABEL_SIZES[labelSize]) labelSize = DEFAULT_SIZE;
 // 사진 표현: 회색조(B1 Pro) / 디더링. 실물로 비교해 고른다
 let photoMode = localStorage.getItem('nl-photo-mode') || 'gray';
-// 디자인: 기본은 방문자가 고른 템플릿, 스태프가 바꾸면 그 값을 쓴다
+// 디자인: 기본은 방문자가 고른 템플릿, 스태프가 바꾸면 그 값을 쓴다 (그 사람의 사진 케이스 3종 안에서)
 let tplOverride = '';
+function fillTplOptions(c) {
+  const tp = document.getElementById('tplSel');
+  tp.innerHTML = `<option value="">디자인: 방문자 선택 (${PHOTO_CASES[c].ko})</option>` + templatesFor(c).map(k => `<option value="${k}">디자인: ${TEMPLATES[k].ko}</option>`).join('');
+  tp.value = ''; tplOverride = '';
+}
 const renderLabel = (canvas, data, prn) => drawLabel(canvas, { ...data, tpl: tplOverride || data.tpl }, prn, labelSize, photoMode);
 let printer = PRINTERS.B1_PRO;
 import { decodePayload } from '../payload.mjs';
@@ -25,7 +30,7 @@ document.getElementById('model').onchange = e => { printer = PRINTERS[e.target.v
   sel.value = labelSize;
   sel.onchange = () => { labelSize = sel.value; localStorage.setItem('nl-label-size', labelSize); if (current) renderLabel(document.getElementById('label'), current, printer); };
   const tp = document.getElementById('tplSel');
-  tp.innerHTML = '<option value="">디자인: 방문자 선택</option>' + Object.entries(TEMPLATES).map(([k, v]) => `<option value="${k}">디자인: ${v.ko}</option>`).join('');
+  fillTplOptions('none');
   tp.onchange = () => { tplOverride = tp.value; if (current) renderLabel(document.getElementById('label'), current, printer); };
   const pm = document.getElementById('photoMode');
   pm.value = photoMode;
@@ -125,6 +130,7 @@ function show(p) {
   const today = kstDay(Date.now());
   const no = events.filter(e => !e.reprint && kstDay(e.at) === today).length + 1;
   current = { ...p, photo: p.photoImg ?? null, no, date: Date.now(), gender: 'unset', age: 'unset', ev: null };
+  fillTplOptions(caseOf(current));
   renderLabel($('label'), current, printer);
   $('labelCard').hidden = false;
   document.querySelectorAll('.chip.on').forEach(b => b.classList.remove('on'));

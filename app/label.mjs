@@ -19,13 +19,37 @@ export const LABEL_SIZES = {
 export const DEFAULT_SIZE = '54x80';
 
 // ── 포토카드 템플릿 (한국 전통 모티프, 흑백 감열지용) ──
-export const TEMPLATES = {
-  saekdong: { ko: '색동', ja: 'セットン（虹色のしま）' },
-  changsal: { ko: '한옥 창살', ja: '韓屋のまど' },
-  idcard:   { ko: '한글 이름 증명서', ja: 'ハングル名前証' },
-  bojagi:   { ko: '조각보', ja: 'ポジャギ（つぎはぎ布）' },
+// 사진 케이스별로 3종씩, 모두 9종. 방문자는 자기 케이스의 3종 중에서 고른다
+//   portrait = 사진 O · 인물 사진 / scene = 사진 O · 그 외(활동 사진·풍경) / none = 사진 X
+export const PHOTO_CASES = {
+  none:     { ko: '사진 없음', ja: '写真なし' },
+  portrait: { ko: '인물 사진', ja: '自分の写真（人物）' },
+  scene:    { ko: '활동·풍경 사진', ja: '今日の写真・景色' },
 };
-export const DEFAULT_TEMPLATE = 'saekdong';
+export const TEMPLATES = {
+  // 사진 없음
+  'n-saekdong': { case: 'none', base: 'saekdong', ko: '색동 이름표', ja: 'セットン（虹色のしま）' },
+  'n-wonchang': { case: 'none', base: 'changsal', ko: '한옥 둥근 창', ja: '韓屋のまるまど' },
+  'n-idcard':   { case: 'none', base: 'idcard',   ko: '한글 이름 증명서', ja: 'ハングル名前証' },
+  // 인물 사진
+  'p-passport': { case: 'portrait', base: 'passport', ko: '한글 여권', ja: 'ハングルパスポート' },
+  'p-changsal': { case: 'portrait', base: 'changsal', ko: '한옥 창문', ja: '韓屋のまど' },
+  'p-saekdong': { case: 'portrait', base: 'saekdong', ko: '색동 포토카드', ja: 'セットンのトレカ' },
+  // 활동·풍경 사진
+  's-bojagi':   { case: 'scene', base: 'bojagi',   ko: '조각보 추억', ja: 'ポジャギの思い出' },
+  's-changsal': { case: 'scene', base: 'changsal', ko: '한옥 창살 풍경', ja: '韓屋のまどから' },
+  's-cert':     { case: 'scene', base: 'cert',     ko: '한국 문화 체험 인증서', ja: '韓国文化体験の証' },
+};
+export const DEFAULT_TEMPLATE = 'n-saekdong';
+export const templatesFor = c => Object.keys(TEMPLATES).filter(k => TEMPLATES[k].case === c);
+export const caseOf = d => (d.photo ? (d.photoKind === 'portrait' ? 'portrait' : 'scene') : 'none');
+// 템플릿 ID 정리: 케이스에 맞지 않거나 예전 ID(saekdong 등)면 그 케이스의 같은 계열 또는 첫 번째로
+export function resolveTemplate(tpl, c) {
+  if (TEMPLATES[tpl]?.case === c) return tpl;
+  const list = templatesFor(c);
+  const base = TEMPLATES[tpl]?.base ?? tpl;
+  return list.find(k => TEMPLATES[k].base === base) ?? list[0];
+}
 // 사진 종류: 없음 / 인물(세로 10:11) / 풍경(가로 16:10). 템플릿마다 사진 칸 모양이 달라진다
 export const PHOTO_KINDS = { portrait: { ja: '人物（たて）', aspect: 10 / 11 }, landscape: { ja: '風景（よこ）', aspect: 16 / 10 } };
 export const photoAspect = kind => (PHOTO_KINDS[kind] ?? PHOTO_KINDS.portrait).aspect;
@@ -103,9 +127,11 @@ export function renderLabel(canvas, data, printer = PRINTERS.B1_PRO, size = DEFA
   let box = null;
   if (size === '50x30') drawCompact(ctx, data);
   else {
-    const kind = data.photo ? (PHOTO_KINDS[data.photoKind] ? data.photoKind : guessPhotoKind(data.photo)) : 'none';
-    const tpl = TEMPLATE_DRAW[data.tpl] ?? TEMPLATE_DRAW[DEFAULT_TEMPLATE];
-    box = tpl(ctx, data, kind);   // 사진 칸(기준 좌표)을 돌려준다
+    // 케이스: 사진 없음 / 인물(세로 칸) / 활동·풍경(가로 칸)
+    const c = caseOf(data);
+    const kind = c === 'none' ? 'none' : c === 'portrait' ? 'portrait' : 'landscape';
+    const id = resolveTemplate(data.tpl, c);
+    box = TEMPLATE_DRAW[TEMPLATES[id].base](ctx, data, kind);   // 사진 칸(기준 좌표)을 돌려준다
   }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   toMono(ctx, w, h);
@@ -406,8 +432,9 @@ function tplChangsal(ctx, d, kind) {
     ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(CX, cy, r, 0, Math.PI * 2); ctx.stroke();
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(CX, cy, r * 0.62, 0, Math.PI * 2); ctx.fill();
     ctx.lineWidth = 3; ctx.stroke();
-    const first = [...hangulName(d)][0] ?? '한';
-    ctx.fillStyle = '#000'; ctx.textAlign = 'center'; ctx.font = `800 70px ${FONT_KO}`; ctx.fillText(first, CX, cy + 22);
+    // 일본인 카드는 한글 첫 글자(+로마자), 한국인 카드는 가타카나 첫 글자
+    const first = d.bigLang === 'ja' ? [...d.big][0] : ([...hangulName(d)][0] ?? '한');
+    ctx.fillStyle = '#000'; ctx.textAlign = 'center'; ctx.font = `800 70px ${d.bigLang === 'ja' ? FONT_JA : FONT_KO}`; ctx.fillText(first, CX, cy + 22);
     ctx.font = `600 14px sans-serif`; ctx.fillText(roman(first), CX, cy + 44);
     const ny = drawName(ctx, d, 318, W0 - 76, 60);
     drawSegs(ctx, d.segs, Math.max(segsY(ny, 21, d.segs), 392), 21);
@@ -428,13 +455,13 @@ function tplChangsal(ctx, d, kind) {
 }
 
 // ── 3. 한글 이름 증명서: 신분증 형식 + 도장 ──
-function seal(ctx, x, y, r, rot = -0.2) {
+function seal(ctx, x, y, r, rot = -0.2, lines = ['한글이름', '발급완료']) {
   ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
   ctx.strokeStyle = '#000'; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
   ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, r - 6, 0, Math.PI * 2); ctx.stroke();
   ctx.fillStyle = '#000'; ctx.textAlign = 'center';
-  ctx.font = `800 ${Math.round(r * 0.36)}px ${FONT_KO}`; ctx.fillText('한글이름', 0, -r * 0.08);
-  ctx.fillText('발급완료', 0, r * 0.38);
+  ctx.font = `800 ${Math.round(r * 0.36)}px ${FONT_KO}`; ctx.fillText(lines[0], 0, -r * 0.08);
+  ctx.fillText(lines[1], 0, r * 0.38);
   heart(ctx, 0, -r * 0.72, r * 0.2, true);
   ctx.restore();
 }
@@ -465,16 +492,21 @@ function fields(ctx, d, x, y, w, rowH = 30) {
 function mrz(ctx, d, y) {   // 여권 아래 기계판독줄 흉내
   ctx.fillStyle = '#000'; ctx.fillRect(20, y - 22, W0 - 40, 2); ctx.fillRect(20, y - 18, W0 - 40, 1);
   ctx.font = `700 12px monospace`; ctx.textAlign = 'center';
-  ctx.fillText(`<<HANGUL<<NAME<<CARD<<${d.no ? String(d.no).padStart(3, '0') : '000'}<<K-CULTURE<<`, CX, y);
+  ctx.fillText(`<<${d.bigLang === 'ja' ? 'KATAKANA' : 'HANGUL'}<<NAME<<CARD<<${d.no ? String(d.no).padStart(3, '0') : '000'}<<K-CULTURE<<`, CX, y);
 }
-function tplIdcard(ctx, d, kind) {
+function tplIdcard(ctx, d, kind, o = {}) {
+  // 한국인 방문자(이름이 가타카나)면 '한글' 대신 '일본어 이름'으로
+  const kr = d.bigLang === 'ja';
+  const title = (kr ? o.titleKr : null) ?? o.title ?? (kr ? '일본어 이름 증명서' : '한글 이름 증명서');
+  const sub = (kr ? o.subKr : null) ?? o.sub ?? (kr ? 'KATAKANA NAME CARD · K-CULTURE 体験ブース' : 'HANGUL NAME CARD · K-CULTURE 体験ブース');
+  const sealLines = (kr ? o.sealKr : null) ?? o.seal ?? (kr ? ['일본이름', '발급완료'] : ['한글이름', '발급완료']);
   ctx.lineWidth = 4; roundRect(ctx, 6, 6, W0 - 12, H0 - 12, 20); ctx.stroke();
   ctx.save(); roundRect(ctx, 6, 6, W0 - 12, H0 - 12, 20); ctx.clip();
   ctx.fillStyle = '#000'; ctx.fillRect(6, 6, W0 - 12, 56);
   ctx.restore();
   ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
-  ctx.font = `800 22px ${FONT_KO}`; ctx.fillText('한글 이름 증명서', CX, 34);
-  ctx.font = `700 11px sans-serif`; ctx.fillText('HANGUL NAME CARD · K-CULTURE 体験ブース', CX, 52);
+  ctx.font = `800 22px ${FONT_KO}`; ctx.fillText(title, CX, 34);
+  ctx.font = `700 11px sans-serif`; ctx.fillText(sub, CX, 52);
   ctx.fillStyle = '#000';
   let box = null, y;
   if (kind === 'portrait') {
@@ -482,18 +514,18 @@ function tplIdcard(ctx, d, kind) {
     y = fields(ctx, d, 158, 76, 182, 34) + 10;
     const ny = drawName(ctx, d, Math.max(y, box.y + box.h) + 40, W0 - 60, 54);
     drawTiles(ctx, d, ny + 16, 72, 200, 128);
-    seal(ctx, 290, Math.max(ny + 52, 450), 40);
+    seal(ctx, 290, Math.max(ny + 52, 450), 40, -0.2, sealLines);
   } else if (kind === 'landscape') {
     box = fitBox(kind, 20, 72, 320, 176);
     y = fields(ctx, d, 24, box.y + box.h + 8, 312, 30);
     drawTiles(ctx, d, y + 14, 64, 196, 124);
-    seal(ctx, 290, y + 48, 38);
+    seal(ctx, 290, y + 48, 38, -0.2, sealLines);
   } else {
     const ny = drawName(ctx, d, 112, W0 - 60, 64);
     y = fields(ctx, d, 24, Math.max(172, ny + 14), 312, 34);
     const ty = drawTiles(ctx, d, y + 18, 78, 260);
-    if (ty === y + 18) { seal(ctx, CX, y + 96, 54, -0.12); }   // 글자 블록이 없는 한국인 카드: 도장을 크게 가운데
-    else seal(ctx, 290, 462, 40);
+    if (ty === y + 18) { seal(ctx, CX, y + 96, 54, -0.12, sealLines); }   // 글자 블록이 없는 한국인 카드: 도장을 크게 가운데
+    else seal(ctx, 290, 462, 40, -0.2, sealLines);
     ctx.font = `600 13px ${txt(d).forJa ? FONT_JA : FONT_KO}`; ctx.textAlign = 'left'; ctx.fillText(txt(d).foot, 26, ty === y + 18 ? 500 : 470); ctx.textAlign = 'center';
   }
   mrz(ctx, d, 546);
@@ -557,7 +589,10 @@ function tplBojagi(ctx, d, kind) {
   return box;
 }
 
-const TEMPLATE_DRAW = { saekdong: tplSaekdong, changsal: tplChangsal, idcard: tplIdcard, bojagi: tplBojagi };
+// 체험 인증서: 증명서 틀을 활동 사진용으로 (제목·도장 문구만 바꾼다)
+const tplCert = (ctx, d, kind) => tplIdcard(ctx, d, kind, { title: '한국 문화 체험 인증서', sub: 'K-CULTURE EXPERIENCE · 韓国文化体験の証', seal: ['K-문화', '체험완료'] });
+const tplPassport = (ctx, d, kind) => tplIdcard(ctx, d, kind, { title: '한글 여권', sub: 'HANGUL PASSPORT · K-CULTURE 体験ブース', seal: ['한글여권', '발급완료'], titleKr: '가타카나 여권', subKr: 'KATAKANA PASSPORT · K-CULTURE 体験ブース', sealKr: ['일본이름', '발급완료'] });
+const TEMPLATE_DRAW = { saekdong: tplSaekdong, changsal: tplChangsal, idcard: tplIdcard, bojagi: tplBojagi, cert: tplCert, passport: tplPassport };
 
 function drawPhotocard(ctx, d) {
   const { big, segs = [], bigLang = 'ko', no, date = new Date() } = d;
