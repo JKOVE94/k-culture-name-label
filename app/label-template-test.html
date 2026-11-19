@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>포카 템플릿 × 사진 종류</title>
+<style>
+  body { margin: 6px; background: #eee; font: 11px sans-serif; }
+  .row { display: flex; gap: 6px; margin-bottom: 6px; }
+  figure { margin: 0; text-align: center; }
+  canvas { background: #fff; height: 360px; width: auto; display: block; }
+</style></head>
+<body>
+<div id="g"></div>
+<script type="module">
+// 템플릿 4종 × (사진 없음 / 인물 / 풍경) 렌더 확인. ?mode=dither 로 디더링 비교, ?lang=ja 로 한국인 카드
+import { renderLabel, PRINTERS, TEMPLATES } from './label.mjs';
+await document.fonts.ready;
+const q = new URLSearchParams(location.search);
+const load = async src => { const i = new Image(); i.src = src; await i.decode(); return i; };
+const portrait = await load(q.get('p') || './sample-test.jpg'), landscape = await load(q.get('l') || './sample-landscape.jpg');
+const d = q.get('lang') === 'ja'
+  ? { big: 'キム・ミンジュンさん', segs: [{ text: '김민준' }], bigLang: 'ja', hon: 'san', no: 7 }
+  : { big: '다나카 상', segs: [{ text: '田中', rt: 'たなか' }, { text: 'さん' }], bigLang: 'ko', hon: 'san', no: 42 };
+const only = q.get('kind');
+for (const [kind, photo] of [['none', null], ['portrait', portrait], ['landscape', landscape]].filter(([k]) => !only || k === only)) {
+  const row = document.createElement('div'); row.className = 'row';
+  for (const tpl of Object.keys(TEMPLATES)) {
+    const f = document.createElement('figure'), c = document.createElement('canvas');
+    renderLabel(c, { ...d, tpl, photo, photoKind: photo ? kind : undefined, date: Date.parse('2027-01-10T03:00:00Z') }, PRINTERS.B1_PRO, '54x80', q.get('mode') || 'gray');
+    f.append(c, Object.assign(document.createElement('figcaption'), { textContent: `${TEMPLATES[tpl].ko} · ${kind}` }));
+    row.append(f);
+  }
+  document.getElementById('g').append(row);
+}
+document.title += ' ✓';
+</script>
+</body></html>

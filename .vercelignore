@@ -13,3 +13,5 @@ app/src/
 app/package.json
 app/package-lock.json
 app/label-photo-test.html
+app/label-template-test.html
+app/label-board.html

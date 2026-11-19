@@ -1,10 +1,12 @@
-import { renderLabel as drawLabel, PRINTERS, LABEL_SIZES, DEFAULT_SIZE } from '../label.mjs';
+import { renderLabel as drawLabel, PRINTERS, LABEL_SIZES, DEFAULT_SIZE, TEMPLATES } from '../label.mjs';
 // 라벨 크기: 50×80 포토카드(기본) / 50×30 이름표. 고른 값은 이 폰에 기억한다
 let labelSize = localStorage.getItem('nl-label-size') || DEFAULT_SIZE;
 if (!LABEL_SIZES[labelSize]) labelSize = DEFAULT_SIZE;
 // 사진 표현: 회색조(B1 Pro) / 디더링. 실물로 비교해 고른다
 let photoMode = localStorage.getItem('nl-photo-mode') || 'gray';
-const renderLabel = (canvas, data, prn) => drawLabel(canvas, data, prn, labelSize, photoMode);
+// 디자인: 기본은 방문자가 고른 템플릿, 스태프가 바꾸면 그 값을 쓴다
+let tplOverride = '';
+const renderLabel = (canvas, data, prn) => drawLabel(canvas, { ...data, tpl: tplOverride || data.tpl }, prn, labelSize, photoMode);
 let printer = PRINTERS.B1_PRO;
 import { decodePayload } from '../payload.mjs';
 import { toFile, toQrChunks } from '../stats-core.mjs';
@@ -22,6 +24,9 @@ document.getElementById('model').onchange = e => { printer = PRINTERS[e.target.v
   sel.innerHTML = Object.entries(LABEL_SIZES).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
   sel.value = labelSize;
   sel.onchange = () => { labelSize = sel.value; localStorage.setItem('nl-label-size', labelSize); if (current) renderLabel(document.getElementById('label'), current, printer); };
+  const tp = document.getElementById('tplSel');
+  tp.innerHTML = '<option value="">디자인: 방문자 선택</option>' + Object.entries(TEMPLATES).map(([k, v]) => `<option value="${k}">디자인: ${v.ko}</option>`).join('');
+  tp.onchange = () => { tplOverride = tp.value; if (current) renderLabel(document.getElementById('label'), current, printer); };
   const pm = document.getElementById('photoMode');
   pm.value = photoMode;
   pm.onchange = () => { photoMode = pm.value; localStorage.setItem('nl-photo-mode', photoMode); if (current) renderLabel(document.getElementById('label'), current, printer); };

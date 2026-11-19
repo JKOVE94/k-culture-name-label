@@ -114,6 +114,12 @@
   #qr { display: block; width: 220px; height: 220px; image-rendering: pixelated; }
   .done-note { font-size: 14px; color: var(--sub); margin-top: 16px; }
   .num.n4 { background: var(--yellow); }
+  .num.n5 { background: var(--lav); }
+  .tpl-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .tpl { border: 2px solid var(--ink); border-radius: 14px; background: #fff; padding: 6px 4px 6px; font-family: var(--round); font-size: 11px; color: var(--ink); box-shadow: 2px 2px 0 var(--ink); }
+  .tpl canvas { width: 100%; height: auto; display: block; border-radius: 8px; margin-bottom: 4px; }
+  .tpl.on { background: var(--yellow); box-shadow: 0 0 0 3px var(--pink-d); }
+  .tpl b { display: block; font-size: 12px; }
   .crop-wrap { margin-top: 12px; }
   .crop-wrap canvas { width: 100%; height: auto; display: block; border-radius: 16px; border: 3px solid var(--ink); touch-action: none; background: #f3eee9; }
   .crop-wrap input[type=range] { width: 100%; margin-top: 8px; accent-color: var(--pink-d); }
@@ -193,10 +199,16 @@
     <input type="file" id="pickInput" accept="image/*" hidden>
     <input type="file" id="camInput" accept="image/*" capture="user" hidden>
     <div class="crop-wrap" id="cropWrap" hidden>
-      <canvas id="crop" width="500" height="450"></canvas>
+      <div class="chips" id="kind" style="margin-bottom:8px"></div>
+      <canvas id="crop" width="500" height="550"></canvas>
       <div class="tip">指でドラッグして位置、スライダーで大きさを調整してね</div>
       <input type="range" id="zoom" min="1" max="3" step="0.01" value="1">
     </div>
+  </section>
+
+  <section class="step" id="tplStep">
+    <div class="step-head"><span class="num n5" id="tplNum">4</span>シールのデザイン <small>韓国の伝統もよう</small></div>
+    <div class="tpl-grid" id="tpls"></div>
   </section>
 
   <div class="sticker-area">
@@ -265,7 +277,7 @@ import { splitKorean } from './input.mjs';
 import { renderKeepsake, saveCanvas } from './keepsake.mjs';
 import { encodePayload } from './payload.mjs';
 import { encodePhoto, photoChunks } from './photo-qr.mjs';
-import { PHOTO_ASPECT } from './label.mjs';
+import { renderLabel, PRINTERS, TEMPLATES, PHOTO_KINDS, photoAspect, guessPhotoKind } from './label.mjs';
 import qrcode from './vendor/qrcode.mjs';
 qrcode.stringToBytes = s => Array.from(new TextEncoder().encode(s));   // 한글·일본어를 UTF-8로
 
@@ -401,12 +413,39 @@ function render() {
   };
   const hasPhoto = !!crop.img;
   $('stickerPhoto').hidden = !hasPhoto || !big;
-  if (hasPhoto) $('stickerPhoto').src = cropCanvas(400, Math.round(400 / PHOTO_ASPECT)).toDataURL('image/jpeg', 0.85);
+  if (hasPhoto) $('stickerPhoto').src = cropCanvas(400, Math.round(400 / cropAspect())).toDataURL('image/jpeg', 0.85);
+  if (ticket) Object.assign(ticket, { tpl, photoKind: hasPhoto ? crop.kind : null });
+  $('tplNum').textContent = String(Number($('photoNum').textContent) + 1);
+  queueTplPreviews();
 }
 let ticket = null;
 
-// ── 사진 (선택): 고르기·찍기 → 포카 사진 칸 비율(10:9)로 자르기 ──
-const crop = { img: null, zoom: 1, x: 0, y: 0 };   // x, y: 사진 중심 이동량(자르기 칸 기준 비율)
+// ── 포카 디자인 고르기: 지금 이름·사진으로 4가지 템플릿을 작게 그려 보여 준다 ──
+// (인쇄용 흑백 그대로가 아니라 먹색·크림색으로 물들여 보여 준다)
+let tpl = localStorage.getItem('nl-tpl') || 'saekdong';
+if (!TEMPLATES[tpl]) tpl = 'saekdong';
+$('tpls').innerHTML = Object.entries(TEMPLATES).map(([k, v]) => `<button class="tpl" data-t="${k}"><canvas></canvas><b>${v.ko}</b>${v.ja}</button>`).join('');
+$('tpls').onclick = e => { const b = e.target.closest('.tpl'); if (!b) return; tpl = b.dataset.t; localStorage.setItem('nl-tpl', tpl); render(); };
+let tplTimer = 0;
+function queueTplPreviews() { clearTimeout(tplTimer); tplTimer = setTimeout(drawTplPreviews, 250); }
+function drawTplPreviews() {
+  const sample = ticket ?? { big: '다나카 상', segs: [{ text: '田中', rt: 'たなか' }, { text: 'さん' }], bigLang: 'ko', hon: 'san' };
+  const photo = crop.img ? cropCanvas(240, Math.round(240 / cropAspect())) : null;
+  const work = document.createElement('canvas');
+  for (const b of $('tpls').children) {
+    b.classList.toggle('on', b.dataset.t === tpl);
+    renderLabel(work, { ...sample, tpl: b.dataset.t, photo, photoKind: photo ? crop.kind : null, no: 1, date: Date.now() }, PRINTERS.B1, '54x80', 'gray');
+    const c = b.querySelector('canvas'); c.width = 192; c.height = Math.round(192 * work.height / work.width);
+    const g = c.getContext('2d'); g.drawImage(work, 0, 0, c.width, c.height);
+    const img = g.getImageData(0, 0, c.width, c.height), d = img.data;
+    for (let i = 0; i < d.length; i += 4) { const t = d[i] / 255; d[i] = 59 + (255 - 59) * t; d[i + 1] = 47 + (250 - 47) * t; d[i + 2] = 58 + (244 - 58) * t; }
+    g.putImageData(img, 0, 0);
+  }
+}
+
+// ── 사진 (선택): 고르기·찍기 → 사진 종류에 맞는 비율로 자르기 ──
+const crop = { img: null, zoom: 1, x: 0, y: 0, kind: 'portrait' };   // x, y: 사진 중심 이동량(자르기 칸 기준 비율)
+const cropAspect = () => photoAspect(crop.kind);
 function cropCanvas(w, h) {
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const g = c.getContext('2d'), img = crop.img;
@@ -430,10 +469,20 @@ async function setPhoto(file) {
   } catch {
     const img = new Image(); img.src = URL.createObjectURL(file); await img.decode(); crop.img = img;
   }
-  Object.assign(crop, { zoom: 1, x: 0, y: 0 }); $('zoom').value = 1;
+  Object.assign(crop, { zoom: 1, x: 0, y: 0, kind: guessPhotoKind(crop.img) }); $('zoom').value = 1;
+  setKind(crop.kind);
   $('cropWrap').hidden = false; $('noPhotoBtn').hidden = false;
   drawCrop(); render();
 }
+// 사진 종류(인물/풍경): 자동으로 고르고, 바꿀 수도 있다. 종류에 따라 자르기 비율과 포카 디자인이 달라진다
+function setKind(kind) {
+  crop.kind = kind;
+  $('kind').innerHTML = Object.entries(PHOTO_KINDS).map(([k, v]) => `<button class="chip ${k === kind ? 'on' : ''}" data-k="${k}">${v.ja}</button>`).join('');
+  const c = $('crop'); c.width = 500; c.height = Math.round(500 / cropAspect());
+  Object.assign(crop, { x: 0, y: 0 });
+  drawCrop();
+}
+$('kind').onclick = e => { const k = e.target.closest('button')?.dataset.k; if (k) { setKind(k); render(); } };
 $('pickBtn').onclick = () => $('pickInput').click();
 $('camBtn').onclick = () => $('camInput').click();
 $('pickInput').onchange = e => { setPhoto(e.target.files[0]); e.target.value = ''; };
@@ -470,7 +519,8 @@ async function openDone() {
   let frames;
   if (crop.img) {
     const id = Math.random().toString(36).slice(2, 8);
-    const chunks = photoChunks(id, await encodePhoto(cropCanvas(400, Math.round(400 / PHOTO_ASPECT))));
+    const [ew, eh] = crop.kind === 'landscape' ? [240, 150] : [200, 220];
+    const chunks = photoChunks(id, await encodePhoto(cropCanvas(ew * 2, eh * 2), { width: ew, height: eh }));
     const name = encodePayload({ ...ticket, photo: { id, n: chunks.length } });
     frames = chunks.flatMap((c, i) => (i % 3 === 0 ? [name, c] : [c]));   // 이름 QR을 사이사이 끼워 넣는다
   } else frames = [encodePayload(ticket)];
@@ -484,7 +534,7 @@ async function openDone() {
 $('doneBack').onclick = () => { clearInterval(qrTimer); $('doneBg').classList.remove('open'); };
 $('imgBack').onclick = () => $('imgBg').classList.remove('open');
 $('saveCard').onclick = async () => {
-  const c = renderKeepsake(document.createElement('canvas'), { ...ticket, photo: crop.img ? cropCanvas(900, Math.round(900 / PHOTO_ASPECT)) : null });
+  const c = renderKeepsake(document.createElement('canvas'), { ...ticket, photo: crop.img ? cropCanvas(900, Math.round(900 / cropAspect())) : null });
   const r = await saveCanvas(c, 'hangul-name.png', url => { $('cardImg').src = url; $('imgBg').classList.add('open'); });
   if (r === 'shared' || r === 'download') toast('保存できました！💖');
 };
@@ -513,6 +563,10 @@ $('copy').onclick = () => navigator.clipboard?.writeText(logEl.textContent);
 // 테스트용: ?q=田中 로 열면 미리 입력
 const q = new URLSearchParams(location.search).get('q');
 if (q) { nameEl.value = q; refresh(); }
+// 시험용: ?focus=요소ID 로 열면 그 부분만 보이게 (화면 확인용)
+{ const f = new URLSearchParams(location.search).get('focus'); if (f) for (const el of document.querySelectorAll('main > *')) if (el.id !== f) el.style.display = 'none'; }
+// 시험용: ?photo=사진주소 로 열면 그 사진을 고른 것처럼
+{ const ph = new URLSearchParams(location.search).get('photo'); if (ph) fetch(ph).then(r => r.blob()).then(setPhoto); }
 render();
 
 // ── 오프라인(PWA) ──
