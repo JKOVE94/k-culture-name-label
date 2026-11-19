@@ -1,12 +1,16 @@
 import { renderLabel as drawLabel, PRINTERS, LABEL_SIZES, DEFAULT_SIZE } from '../label.mjs';
 // 라벨 크기: 50×80 포토카드(기본) / 50×30 이름표. 고른 값은 이 폰에 기억한다
 let labelSize = localStorage.getItem('nl-label-size') || DEFAULT_SIZE;
-const renderLabel = (canvas, data, prn) => drawLabel(canvas, data, prn, labelSize);
+if (!LABEL_SIZES[labelSize]) labelSize = DEFAULT_SIZE;
+// 사진 표현: 회색조(B1 Pro) / 디더링. 실물로 비교해 고른다
+let photoMode = localStorage.getItem('nl-photo-mode') || 'gray';
+const renderLabel = (canvas, data, prn) => drawLabel(canvas, data, prn, labelSize, photoMode);
 let printer = PRINTERS.B1_PRO;
 import { decodePayload } from '../payload.mjs';
 import { toFile, toQrChunks } from '../stats-core.mjs';
 import * as SB from '../supabase.mjs';
 import { BluefySafeNiimbotClient } from './niimbot-ble.mjs';
+import { PhotoCollector, PHOTO_PREFIX } from '../photo-qr.mjs';
 import qrcode from '../vendor/qrcode.mjs';
 qrcode.stringToBytes = s => Array.from(new TextEncoder().encode(s));
 
@@ -18,6 +22,9 @@ document.getElementById('model').onchange = e => { printer = PRINTERS[e.target.v
   sel.innerHTML = Object.entries(LABEL_SIZES).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
   sel.value = labelSize;
   sel.onchange = () => { labelSize = sel.value; localStorage.setItem('nl-label-size', labelSize); if (current) renderLabel(document.getElementById('label'), current, printer); };
+  const pm = document.getElementById('photoMode');
+  pm.value = photoMode;
+  pm.onchange = () => { photoMode = pm.value; localStorage.setItem('nl-photo-mode', photoMode); if (current) renderLabel(document.getElementById('label'), current, printer); };
 }
 const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 1800); };
 
@@ -77,7 +84,8 @@ async function printLabel() {
   if (printing) return false;
   printing = true; $('printBtn').disabled = true; $('printBtn').textContent = '인쇄 중…';
   const meta = client.getModelMetadata();
-  const color = NB.PageColorType.SingleColor;
+  // 사진을 회색조로 그렸으면 회색조 인쇄, 아니면 흑백 인쇄
+  const color = current?.photo && photoMode === 'gray' ? NB.PageColorType.Grayscale : NB.PageColorType.SingleColor;
   const encoded = NB.ImageEncoder.encodeCanvas($('label'), color, meta?.printDirection ?? 'top');
   const task = client.protocol.newPrintTask(client.getPrintTaskType() ?? 'B1', {
     totalPages: 1, statusPollIntervalMs: 100, statusTimeoutMs: 8000, pageColor: color, density: Number($('density').value),
@@ -111,7 +119,7 @@ function show(p) {
   // 포토카드 번호: 오늘 이 폰에서 몇 번째 방문자인지
   const today = kstDay(Date.now());
   const no = events.filter(e => !e.reprint && kstDay(e.at) === today).length + 1;
-  current = { ...p, no, date: Date.now(), gender: 'unset', age: 'unset', ev: null };
+  current = { ...p, photo: p.photoImg ?? null, no, date: Date.now(), gender: 'unset', age: 'unset', ev: null };
   renderLabel($('label'), current, printer);
   $('labelCard').hidden = false;
   document.querySelectorAll('.chip.on').forEach(b => b.classList.remove('on'));
@@ -131,14 +139,49 @@ function finalize() {
   if (current?.ev && !current.ev.final) { current.ev.final = true; persist(); upload(); }
 }
 
+// ── 사진 QR 조각 모으기 (방문자 화면이 이름 QR과 사진 QR들을 번갈아 띄운다) ──
+const photos = new PhotoCollector();
+let pending = null;   // 사진 조각을 기다리는 이름 정보
+const showProgress = st => {
+  $('photoProg').hidden = false; $('skipPhoto').hidden = false;
+  $('photoProg').textContent = `📡 사진 받는 중 ${st.got}/${st.total} — 방문자 QR을 계속 비춰 주세요`;
+};
+const hideProgress = () => { $('photoProg').hidden = true; $('skipPhoto').hidden = true; };
+async function completePending(withPhoto = true) {
+  const p = pending; pending = null; hideProgress();
+  if (!p) return;
+  if (withPhoto && p.photo) { p.photoImg = await photos.image(p.photo.id).catch(() => null); }
+  if (p.photo) photos.forget(p.photo.id);   // 사진은 이 화면 메모리에만 두고 바로 버린다
+  if (p.photoImg) { navigator.vibrate?.([60, 40, 60]); toast('사진 받기 완료 ✅ 방문자에게 QR을 내려도 된다고 알려 주세요'); }
+  await proceed(p);
+}
+$('skipPhoto').onclick = () => completePending(false);
+
+async function proceed(p) {
+  show(p);
+  log(`scanned ${p.big}${p.photoImg ? ' +photo' : ''}`);
+  if ($('auto').checked && client && !seen.has('printed:' + p.id)) { if (await printLabel()) seen.add('printed:' + p.id); }
+}
+
 async function handle(text) {
+  if (text.startsWith(PHOTO_PREFIX)) {
+    const st = photos.add(text);
+    if (st && pending?.photo?.id === st.id) { showProgress(st); if (st.done) await completePending(); }
+    return;
+  }
   let p;
   try { p = decodePayload(text); } catch (e) { toast(e.message); return; }
+  if (p.id === current?.id || p.id === pending?.id) return;   // 번갈아 뜨는 같은 이름 QR은 무시
   if (seen.has(p.id)) toast('이미 스캔한 QR이에요 (재인쇄는 버튼으로)');
   seen.add(p.id);
-  show(p);
-  log(`scanned ${p.big}`);
-  if ($('auto').checked && client && !seen.has('printed:' + p.id)) { if (await printLabel()) seen.add('printed:' + p.id); }
+  if (p.photo) {
+    pending = p;
+    const st = photos.status(p.photo.id);
+    showProgress({ got: st.got, total: p.photo.n });
+    if (st.done) await completePending();
+    return;
+  }
+  await proceed(p);
 }
 
 // ── QR 스캔 (jsQR) ──
@@ -175,7 +218,13 @@ function stopScan() {
 $('printBtn').onclick = () => printLabel();
 $('pngBtn').onclick = () => { const a = document.createElement('a'); a.href = $('label').toDataURL('image/png'); a.download = 'label.png'; a.click(); };
 $('clearBtn').onclick = () => { finalize(); current = null; $('labelCard').hidden = true; window.scrollTo({ top: 0, behavior: 'smooth' }); };
-$('manualBtn').onclick = () => handle($('manual').value.trim());
+// 시험용: ?frames=파일주소 로 열면 그 파일의 줄들을 QR처럼 처리 (사진 QR 흐름 확인)
+{
+  const f = new URLSearchParams(location.search).get('frames');
+  if (f) fetch(f).then(r => r.text()).then(async t => { for (const line of t.split('\n').map(x => x.trim()).filter(Boolean)) await handle(line); });
+}
+// 여러 줄을 붙여 넣으면 한 줄씩 QR처럼 처리 (사진 조각 시험용)
+$('manualBtn').onclick = async () => { for (const line of $('manual').value.split('\n').map(x => x.trim()).filter(Boolean)) await handle(line); };
 
 // ── 오프라인 운영 (Bluefy에는 Service Worker가 없으므로 "한 번 열면 끝까지" + HTTP 캐시) ──
 // 이 페이지는 빌드할 때 라이브러리·코드를 모두 한 파일(print.html)에 넣는다.

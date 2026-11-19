@@ -65,6 +65,7 @@
     <div class="row" style="margin-top:10px">
       <select id="model"><option value="B1_PRO" selected>B1 Pro (300dpi)</option><option value="B1">B1 (203dpi)</option></select>
       <select id="labelSize"></select>
+      <select id="photoMode"><option value="gray">사진: 회색조</option><option value="dither">사진: 디더링</option></select>
       <span style="font-size:13px">진하기</span>
       <select id="density"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
       <label style="font-size:13px;display:flex;align-items:center;gap:4px"><input type="checkbox" id="auto" checked> 스캔하면 바로 인쇄</label>
@@ -78,6 +79,8 @@
     <div class="video-wrap" id="videoWrap" hidden><video id="video" playsinline muted></video><div class="frame"></div></div>
     <div class="row" style="margin-top:10px"><button class="mint" id="scanBtn" style="flex:1">📷 QR 스캔 시작</button></div>
     <div class="scan-msg" id="scanMsg">방문자 폰의 QR을 비춰 주세요</div>
+    <div class="scan-msg" id="photoProg" style="font-weight:800;color:var(--pink)" hidden></div>
+    <div class="row" style="justify-content:center"><button id="skipPhoto" hidden>사진 없이 진행</button></div>
   </section>
 
   <!-- 라벨 -->

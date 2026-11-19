@@ -11,10 +11,18 @@ export const PRINTERS = {
   B1:     { name: 'B1',     dpi: 203, headPx: 384 },
 };
 export const LABEL_SIZES = {
+  // 54mm 폭 롤도 인쇄 헤드 폭(약 48mm)만큼만 찍히므로 좌우에 약 3mm 흰 여백이 남는다
+  '54x80': { name: '54×80 포토카드', mm: [54, 80], base: [360, 576] },
   '50x80': { name: '50×80 포토카드', mm: [50, 80], base: [360, 576] },
   '50x30': { name: '50×30 이름표', mm: [50, 30], base: [LABEL_W, LABEL_H] },
 };
-export const DEFAULT_SIZE = '50x80';
+export const DEFAULT_SIZE = '54x80';
+
+// 사진형 포카의 사진 칸 (기준 좌표 360×576). 방문자 화면의 자르기 비율도 이 값을 쓴다 (10:9)
+export const PHOTO_BOX = { x: 30, y: 84, w: 300, h: 270 };
+export const PHOTO_ASPECT = PHOTO_BOX.w / PHOTO_BOX.h;
+/** 사진 표현: 'gray' = B1 Pro 회색조 인쇄, 'dither' = 흑백 점(오류 확산) */
+export const PHOTO_MODES = { gray: '회색조', dither: '디더링' };
 export function labelPixels({ dpi, headPx }, mm = [50, 30]) {
   return { w: Math.min(headPx, Math.round(mm[0] * dpi / 25.4)), h: Math.round(mm[1] * dpi / 25.4) };
 }
@@ -66,7 +74,11 @@ function fitFont(ctx, text, family, max, min, width) {
  *   bigLang: 'ko' | 'ja'
  *   footer: 맨 아래 문구
  */
-export function renderLabel(canvas, data, printer = PRINTERS.B1_PRO, size = DEFAULT_SIZE) {
+/**
+ * data.photo: 사진(Image/ImageBitmap/Canvas). 있으면 사진형 포카로 그린다.
+ * photoMode: 'gray'면 사진 부분만 16단계 회색으로 남긴다 → 인쇄 시 PageColorType.Grayscale 필요
+ */
+export function renderLabel(canvas, data, printer = PRINTERS.B1_PRO, size = DEFAULT_SIZE, photoMode = 'dither') {
   const spec = LABEL_SIZES[size] ?? LABEL_SIZES[DEFAULT_SIZE];
   const { w, h } = labelPixels(printer, spec.mm);
   canvas.width = w; canvas.height = h;
@@ -77,10 +89,52 @@ export function renderLabel(canvas, data, printer = PRINTERS.B1_PRO, size = DEFA
   const s = Math.min(w / BW, h / BH);
   ctx.setTransform(s, 0, 0, s, (w - BW * s) / 2, (h - BH * s) / 2);
   ctx.fillStyle = '#000'; ctx.strokeStyle = '#000';
-  (size === '50x30' ? drawCompact : drawPhotocard)(ctx, data);
+  const withPhoto = !!data.photo && size !== '50x30';
+  (size === '50x30' ? drawCompact : withPhoto ? drawPhotoCard : drawPhotocard)(ctx, data);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   toMono(ctx, w, h);
+  if (withPhoto) {
+    // 사진 칸은 글자와 따로 처리한다 (글자는 선명한 흑백, 사진은 회색조 또는 디더링)
+    const ox = (w - BW * s) / 2, oy = (h - BH * s) / 2;
+    const bx = Math.round(ox + PHOTO_BOX.x * s), by = Math.round(oy + PHOTO_BOX.y * s);
+    const bw = Math.round(PHOTO_BOX.w * s), bh = Math.round(PHOTO_BOX.h * s);
+    drawPhotoRegion(ctx, data.photo, bx, by, bw, bh, photoMode);
+    const lw = Math.max(3, Math.round(3 * s));
+    ctx.fillStyle = '#000';
+    ctx.fillRect(bx - lw, by - lw, bw + lw * 2, lw); ctx.fillRect(bx - lw, by + bh, bw + lw * 2, lw);
+    ctx.fillRect(bx - lw, by, lw, bh); ctx.fillRect(bx + bw, by, lw, bh);
+  }
   return canvas;
+}
+
+// ── 사진 처리: 가운데 맞춰 채우기 → 밝기 범위 늘리기 → 회색 16단계 또는 Atkinson 디더링 ──
+function drawPhotoRegion(ctx, photo, x, y, w, h, mode) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  const pw = photo.width, ph = photo.height, k = Math.max(w / pw, h / ph);
+  g.drawImage(photo, (w - pw * k) / 2, (h - ph * k) / 2, pw * k, ph * k);
+  const img = g.getImageData(0, 0, w, h), d = img.data, n = w * h;
+  const lum = new Float32Array(n);
+  for (let i = 0; i < n; i++) lum[i] = d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114;
+  // 감열지는 어두운 쪽이 뭉개지므로 2%~98% 구간을 0~255로 늘리고 살짝 밝게(감마 0.85)
+  const sorted = Float32Array.from(lum).sort();
+  const lo = sorted[Math.floor(n * 0.02)], hi = sorted[Math.floor(n * 0.98)] || 255;
+  for (let i = 0; i < n; i++) lum[i] = 255 * Math.pow(Math.min(1, Math.max(0, (lum[i] - lo) / Math.max(1, hi - lo))), 0.85);
+  if (mode === 'gray') {
+    for (let i = 0; i < n; i++) lum[i] = Math.round(lum[i] / 17) * 17;   // 16단계
+  } else {
+    // Atkinson 디더링: 오차의 3/4만 퍼뜨려 감열지에서 덜 시커멓게 나온다
+    for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+      const i = yy * w + xx, old = lum[i], nv = old < 128 ? 0 : 255, err = (old - nv) / 8;
+      lum[i] = nv;
+      for (const [dx, dy] of [[1, 0], [2, 0], [-1, 1], [0, 1], [1, 1], [0, 2]]) {
+        const X = xx + dx, Y = yy + dy;
+        if (X >= 0 && X < w && Y < h) lum[Y * w + X] += err;
+      }
+    }
+  }
+  for (let i = 0; i < n; i++) { d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = lum[i]; d[i * 4 + 3] = 255; }
+  ctx.putImageData(img, x, y);
 }
 
 // ── 50×30 작은 이름표 (기준 384×240) ──
@@ -161,6 +215,63 @@ export function hangulName({ big, segs = [], bigLang = 'ko', hon }) {
   const suf = HON_KO[hon];
   if (suf && name.endsWith(' ' + suf)) name = name.slice(0, -(suf.length + 1));
   return name.replace(/[^\uac00-\ud7a3]/g, '');
+}
+
+// ── 사진형 포카 (기준 360×576): 위 사진, 아래 이름 ──
+function drawPhotoCard(ctx, d) {
+  const { big, segs = [], bigLang = 'ko', no, date = new Date() } = d;
+  const W = 360, H = 576, cx = W / 2, forJa = bigLang !== 'ja';
+  ctx.textBaseline = 'alphabetic';
+  ctx.lineWidth = 4; roundRect(ctx, 6, 6, W - 12, H - 12, 26); ctx.stroke();
+  ctx.save(); roundRect(ctx, 6, 6, W - 12, H - 12, 26); ctx.clip();
+  const kinds = ['solid', 'diag', 'dots', 'vline', 'check'], bwid = (W - 12) / kinds.length;
+  kinds.forEach((k, i) => { ctx.fillStyle = pattern(ctx, k); ctx.fillRect(6 + i * bwid, 6, bwid + 1, 18); });
+  [...kinds].reverse().forEach((k, i) => { ctx.fillStyle = pattern(ctx, k); ctx.fillRect(6 + i * bwid, H - 24, bwid + 1, 18); });
+  ctx.fillStyle = '#000'; ctx.fillRect(6, 24, W - 12, 3); ctx.fillRect(6, H - 27, W - 12, 3);
+  ctx.restore();
+
+  // 뱃지 (사진 위)
+  ctx.font = `800 14px ${FONT_JA}`;
+  const badge = 'K-CULTURE 体験ブース', bw = ctx.measureText(badge).width + 28;
+  ctx.fillStyle = '#000'; roundRect(ctx, cx - bw / 2, 42, bw, 26, 13); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(badge, cx, 60);
+  ctx.fillStyle = '#000'; flower(ctx, 34, 55, 8); flower(ctx, W - 34, 55, 8);
+  // (사진 칸 PHOTO_BOX: y 84~354는 renderLabel에서 채운다)
+
+  // 큰 이름 (y 372~428)
+  const fam = bigLang === 'ja' ? FONT_JA : FONT_KO, maxW = W - 70;
+  let size = fitFont(ctx, big, fam, 60, 26, maxW), twoLine = false;
+  const cut = Math.max(big.lastIndexOf('・'), big.lastIndexOf(' '));
+  if (size < 40 && cut > 0) {
+    const l1 = big.slice(0, cut + (big[cut] === '・' ? 1 : 0)).trim(), l2 = big.slice(cut + 1).trim();
+    size = Math.min(fitFont(ctx, l1, fam, 38, 24, maxW), fitFont(ctx, l2, fam, 38, 24, maxW));
+    ctx.font = `800 ${size}px ${fam}`; ctx.fillText(l1, cx, 398); ctx.fillText(l2, cx, 398 + size * 1.08);
+    twoLine = true;
+  } else {
+    ctx.font = `800 ${size}px ${fam}`; ctx.fillText(big, cx, 404 + size * 0.36);
+  }
+
+  // 원래 이름 + 후리가나 (y 470)
+  const smallY = twoLine ? 480 : 474, smallSize = twoLine ? 20 : 22, rtSize = 14;
+  ctx.font = `600 ${smallSize}px ${FONT_JA}`;
+  const widths = segs.map(x => ctx.measureText(x.text).width);
+  let x = cx - widths.reduce((a, b) => a + b, 0) / 2;
+  ctx.textAlign = 'left';
+  segs.forEach((sg, i) => {
+    ctx.font = `600 ${smallSize}px ${FONT_JA}`; ctx.fillText(sg.text, x, smallY);
+    if (sg.rt) { ctx.font = `500 ${rtSize}px ${FONT_JA}`; ctx.textAlign = 'center'; ctx.fillText(sg.rt, x + widths[i] / 2, smallY - smallSize - 2); ctx.textAlign = 'left'; }
+    x += widths[i];
+  });
+
+  // 날짜 · 번호 · 하단 문구
+  const dt = new Date(date);
+  const ds = `${dt.getFullYear()}.${String(dt.getMonth() + 1).padStart(2, '0')}.${String(dt.getDate()).padStart(2, '0')}`;
+  ctx.fillRect(30, 492, W - 60, 1.5);
+  ctx.font = `700 15px sans-serif`;
+  ctx.textAlign = 'left'; ctx.fillText(ds, 30, 514);
+  ctx.textAlign = 'right'; ctx.fillText(no ? `No. ${String(no).padStart(3, '0')}` : '', W - 30, 514);
+  ctx.textAlign = 'center'; ctx.font = `700 14px ${forJa ? FONT_JA : FONT_KO}`;
+  ctx.fillText(forJa ? '♥ 出会えてうれしいです！ ♥' : '♥ 만나서 반가워요! ♥', cx, 538);
 }
 
 function drawPhotocard(ctx, d) {

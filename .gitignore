@@ -1,3 +1,5 @@
 node_modules/
 .DS_Store
 __pycache__/
+app/sample-test.jpg
+app/test-frames.txt

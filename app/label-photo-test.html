@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사진 포카 미리보기 (회색조 vs 디더링)</title>
+<style>
+  body { margin: 8px; background: #eee; font-family: sans-serif; font-size: 12px; }
+  .grid { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+  figure { margin: 0; text-align: center; }
+  canvas { background: #fff; height: 360px; width: auto; display: block; }
+</style></head>
+<body>
+<div class="grid" id="g"></div>
+<script type="module">
+// 방문자 화면과 똑같이 사진을 QR 예산(약 3.6KB)으로 줄인 뒤, 그 사진으로 라벨을 그린다
+import { renderLabel, PRINTERS, PHOTO_ASPECT } from './label.mjs';
+import { encodePhoto, photoChunks } from './photo-qr.mjs';
+await document.fonts.ready;
+const src = new Image(); src.src = new URLSearchParams(location.search).get('img') || './sample-test.jpg'; await src.decode();
+const crop = document.createElement('canvas'); crop.width = 400; crop.height = Math.round(400 / PHOTO_ASPECT);
+const k = Math.max(crop.width / src.width, crop.height / src.height);
+crop.getContext('2d').drawImage(src, (crop.width - src.width * k) / 2, (crop.height - src.height * k) / 2, src.width * k, src.height * k);
+const b64 = await encodePhoto(crop);
+const small = new Image(); small.src = 'data:image/jpeg;base64,' + b64; await small.decode();
+const info = `${Math.round(b64.length * 0.75)}바이트 → QR ${photoChunks('x', b64).length}장`;
+const cases = [
+  [{ big: '다나카 상', segs: [{ text: '田中', rt: 'たなか' }, { text: 'さん' }], hon: 'san', no: 42 }, 'gray'],
+  [{ big: '다나카 상', segs: [{ text: '田中', rt: 'たなか' }, { text: 'さん' }], hon: 'san', no: 42 }, 'dither'],
+  [{ big: 'キム・ミンジュンさん', segs: [{ text: '김민준' }], bigLang: 'ja', hon: 'san', no: 7 }, 'gray'],
+];
+for (const [d, mode] of cases) {
+  const f = document.createElement('figure'), c = document.createElement('canvas');
+  renderLabel(c, { ...d, photo: small, date: Date.parse('2027-01-10T03:00:00Z') }, PRINTERS.B1_PRO, '54x80', mode);
+  f.append(c, Object.assign(document.createElement('figcaption'), { textContent: `${mode === 'gray' ? '회색조' : '디더링'} · 사진 ${info}` }));
+  document.getElementById('g').append(f);
+}
+document.title += ' ✓';
+</script>
+</body></html>

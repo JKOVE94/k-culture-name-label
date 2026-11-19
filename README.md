@@ -16,6 +16,7 @@
 | `app/index.html` | 방문자 | 「呼ばれたい名前」 입력 → 읽기 선택(한자일 때) → 호칭(さん/くん/ちゃん/名前だけ) → 한글 미리보기 → QR + 컬러 이름카드 저장 |
 | `app/print.html` | 스태프 | QR 스캔 → 흑백 라벨 생성(567×354px, 300dpi) → B1 Pro 인쇄, 중복 스캔 경고, 성별·연령층 선택 입력, 오늘 인쇄 수 |
 | `app/stats.html` | 리더 | 인쇄 폰들의 기록을 QR 스캔·파일·붙여넣기(·Supabase)로 모아 집계: 방문 수, 언어, 성별·연령층, 시간대, 일자별, 폰별, CSV |
+| `app/label-photo-test.html` | 개발 | 사진 포카 회색조 vs 디더링 비교 (`?img=사진주소`) |
 | `app/label-test.html` | 개발 | 흑백 라벨 4종 미리보기 |
 | `app/keepsake-test.html` | 개발 | 컬러 이름카드 3종 미리보기 |
 | `app/ime-test.html` | 개발 | iPhone 일본어 키보드 조합 이벤트 확인용 |

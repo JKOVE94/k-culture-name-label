@@ -113,6 +113,12 @@
   .qr-box { display: inline-block; background: #fff; border: 3px solid var(--ink); border-radius: 22px; padding: 14px; box-shadow: 5px 5px 0 var(--mint); }
   #qr { display: block; width: 220px; height: 220px; image-rendering: pixelated; }
   .done-note { font-size: 14px; color: var(--sub); margin-top: 16px; }
+  .num.n4 { background: var(--yellow); }
+  .crop-wrap { margin-top: 12px; }
+  .crop-wrap canvas { width: 100%; height: auto; display: block; border-radius: 16px; border: 3px solid var(--ink); touch-action: none; background: #f3eee9; }
+  .crop-wrap input[type=range] { width: 100%; margin-top: 8px; accent-color: var(--pink-d); }
+  .sticker-photo { display: block; width: 72%; margin: 6px auto 8px; border-radius: 14px; border: 3px solid var(--ink); }
+  .sending { font-size: 13px; font-weight: 800; color: var(--pink-d); margin-top: 10px; }
   .cta.save { background: var(--mint); color: var(--ink); margin-top: 18px; font-size: 17px; }
   .back { margin-top: 12px; font-family: var(--round); font-size: 15px; border: 0; background: none; color: var(--sub); padding: 8px; }
   #cardImg { width: 100%; border-radius: 16px; border: 2px solid var(--ink); }
@@ -177,11 +183,28 @@
     <div class="chips" id="hon"></div>
   </section>
 
+  <section class="step" id="photoStep">
+    <div class="step-head"><span class="num n4" id="photoNum">3</span>写真もいれる？ <small>なくてもOK・保存されません</small></div>
+    <div class="chips">
+      <button class="chip" id="pickBtn">🖼 写真をえらぶ</button>
+      <button class="chip" id="camBtn">🤳 その場で撮る</button>
+      <button class="chip ghost" id="noPhotoBtn" hidden>写真なしにする</button>
+    </div>
+    <input type="file" id="pickInput" accept="image/*" hidden>
+    <input type="file" id="camInput" accept="image/*" capture="user" hidden>
+    <div class="crop-wrap" id="cropWrap" hidden>
+      <canvas id="crop" width="500" height="450"></canvas>
+      <div class="tip">指でドラッグして位置、スライダーで大きさを調整してね</div>
+      <input type="range" id="zoom" min="1" max="3" step="0.01" value="1">
+    </div>
+  </section>
+
   <div class="sticker-area">
     <div class="speech">韓国語だと、こうなります！</div>
     <div class="sticker">
       <span class="corner tl">🌸</span><span class="corner br">💖</span>
       <div id="filled" hidden>
+        <img id="stickerPhoto" class="sticker-photo" alt="" hidden>
         <div class="hello">안녕하세요!</div>
         <div class="big" id="big"></div>
         <div class="small" id="small"></div>
@@ -219,6 +242,7 @@
     <div class="done-title">できた！🎉</div>
     <div class="done-sub">このQRを <b>スタッフ</b> に見せてね 👀</div>
     <div class="qr-box"><canvas id="qr"></canvas></div>
+    <div class="sending" id="sending" hidden>📡 写真も送信中… スタッフがOKと言うまでQRを見せててね</div>
     <div class="done-note">スタッフがあなたの名前シールを印刷します 🎀</div>
     <button class="cta save" id="saveCard">📥 名前カードをスマホに保存</button>
     <button class="back" id="doneBack">← もどって直す</button>
@@ -240,6 +264,8 @@ import { createReader } from './reading.mjs';
 import { splitKorean } from './input.mjs';
 import { renderKeepsake, saveCanvas } from './keepsake.mjs';
 import { encodePayload } from './payload.mjs';
+import { encodePhoto, photoChunks } from './photo-qr.mjs';
+import { PHOTO_ASPECT } from './label.mjs';
 import qrcode from './vendor/qrcode.mjs';
 qrcode.stringToBytes = s => Array.from(new TextEncoder().encode(s));   // 한글·일본어를 UTF-8로
 
@@ -335,6 +361,7 @@ function render() {
   const kanjiRuns = runsInfo.filter(i => i.type === 'kanji');
   $('yomiStep').hidden = !kanjiRuns.length;
   $('honNum').textContent = kanjiRuns.length ? '3' : '2';
+  $('photoNum').textContent = kanjiRuns.length ? '4' : '3';
   $('yomi').innerHTML = kanjiRuns.map(i => {
     const top = i.cands.slice(0, 3).map(c => c.reading);
     if (i.reading && !top.includes(i.reading)) top.unshift(i.reading);
@@ -372,27 +399,92 @@ function render() {
       ? [...runsInfo.filter(i => i.run.trim()).map(i => i.type === 'kanji' ? { text: i.run, rt: i.reading } : { text: i.run }), ...(ja ? [{ text: ja }] : [])]
       : [{ text: nameEl.value.trim() }],
   };
+  const hasPhoto = !!crop.img;
+  $('stickerPhoto').hidden = !hasPhoto || !big;
+  if (hasPhoto) $('stickerPhoto').src = cropCanvas(400, Math.round(400 / PHOTO_ASPECT)).toDataURL('image/jpeg', 0.85);
 }
 let ticket = null;
 
+// ── 사진 (선택): 고르기·찍기 → 포카 사진 칸 비율(10:9)로 자르기 ──
+const crop = { img: null, zoom: 1, x: 0, y: 0 };   // x, y: 사진 중심 이동량(자르기 칸 기준 비율)
+function cropCanvas(w, h) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d'), img = crop.img;
+  if (!img) return c;
+  const k = Math.max(w / img.width, h / img.height) * crop.zoom;
+  const dw = img.width * k, dh = img.height * k;
+  const maxX = Math.max(0, (dw - w) / 2), maxY = Math.max(0, (dh - h) / 2);
+  crop.x = Math.max(-maxX / w, Math.min(maxX / w, crop.x)); crop.y = Math.max(-maxY / h, Math.min(maxY / h, crop.y));
+  g.drawImage(img, (w - dw) / 2 + crop.x * w, (h - dh) / 2 + crop.y * h, dw, dh);
+  return c;
+}
+function drawCrop() {
+  const c = $('crop'), g = c.getContext('2d');
+  g.clearRect(0, 0, c.width, c.height);
+  g.drawImage(cropCanvas(c.width, c.height), 0, 0);
+}
+async function setPhoto(file) {
+  if (!file) return;
+  try {
+    crop.img = await createImageBitmap(file);
+  } catch {
+    const img = new Image(); img.src = URL.createObjectURL(file); await img.decode(); crop.img = img;
+  }
+  Object.assign(crop, { zoom: 1, x: 0, y: 0 }); $('zoom').value = 1;
+  $('cropWrap').hidden = false; $('noPhotoBtn').hidden = false;
+  drawCrop(); render();
+}
+$('pickBtn').onclick = () => $('pickInput').click();
+$('camBtn').onclick = () => $('camInput').click();
+$('pickInput').onchange = e => { setPhoto(e.target.files[0]); e.target.value = ''; };
+$('camInput').onchange = e => { setPhoto(e.target.files[0]); e.target.value = ''; };
+$('noPhotoBtn').onclick = () => { crop.img = null; $('cropWrap').hidden = true; $('noPhotoBtn').hidden = true; render(); };
+$('zoom').oninput = () => { crop.zoom = +$('zoom').value; drawCrop(); };
+$('zoom').onchange = render;
+{
+  let drag = null;
+  const c = $('crop');
+  c.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, cx: crop.x, cy: crop.y }; c.setPointerCapture(e.pointerId); });
+  c.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const r = c.getBoundingClientRect();
+    crop.x = drag.cx + (e.clientX - drag.x) / r.width; crop.y = drag.cy + (e.clientY - drag.y) / r.height; drawCrop();
+  });
+  c.addEventListener('pointerup', () => { drag = null; render(); });
+}
+
 // ── 완료 창 ──
-function drawQr(canvas, text) {
-  const qr = qrcode(0, 'M'); qr.addData(text, 'Byte'); qr.make();
+function drawQr(canvas, text, level = 'M') {
+  const qr = qrcode(0, level); qr.addData(text, 'Byte'); qr.make();
   const n = qr.getModuleCount(), cell = 8, quiet = 2, size = (n + quiet * 2) * cell;
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size); ctx.fillStyle = '#000';
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) ctx.fillRect((c + quiet) * cell, (r + quiet) * cell, cell, cell);
 }
-function openDone() {
+// 사진이 있으면 이름 QR + 사진 QR 조각을 번갈아 보여 준다 (스태프 폰이 연속으로 읽어 모은다)
+let qrTimer = 0;
+async function openDone() {
   if (!ticket) return;
-  drawQr($('qr'), encodePayload(ticket));
+  clearInterval(qrTimer);
+  let frames;
+  if (crop.img) {
+    const id = Math.random().toString(36).slice(2, 8);
+    const chunks = photoChunks(id, await encodePhoto(cropCanvas(400, Math.round(400 / PHOTO_ASPECT))));
+    const name = encodePayload({ ...ticket, photo: { id, n: chunks.length } });
+    frames = chunks.flatMap((c, i) => (i % 3 === 0 ? [name, c] : [c]));   // 이름 QR을 사이사이 끼워 넣는다
+  } else frames = [encodePayload(ticket)];
+  let k = 0;
+  const show = () => drawQr($('qr'), frames[k++ % frames.length], frames.length > 1 ? 'L' : 'M');
+  show();
+  if (frames.length > 1) qrTimer = setInterval(show, 350);
+  $('sending').hidden = frames.length === 1;
   $('doneBg').classList.add('open');
 }
-$('doneBack').onclick = () => $('doneBg').classList.remove('open');
+$('doneBack').onclick = () => { clearInterval(qrTimer); $('doneBg').classList.remove('open'); };
 $('imgBack').onclick = () => $('imgBg').classList.remove('open');
 $('saveCard').onclick = async () => {
-  const c = renderKeepsake(document.createElement('canvas'), ticket);
+  const c = renderKeepsake(document.createElement('canvas'), { ...ticket, photo: crop.img ? cropCanvas(900, Math.round(900 / PHOTO_ASPECT)) : null });
   const r = await saveCanvas(c, 'hangul-name.png', url => { $('cardImg').src = url; $('imgBg').classList.add('open'); });
   if (r === 'shared' || r === 'download') toast('保存できました！💖');
 };

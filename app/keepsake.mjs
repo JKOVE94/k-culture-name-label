@@ -20,7 +20,7 @@ function fit(ctx, text, weight, family, max, min, width) {
 }
 
 /** @param d { big, segs:[{text, rt}], bigLang, tilesText } */
-export function renderKeepsake(canvas, { big, segs = [], bigLang = 'ko', tilesText = '' }) {
+export function renderKeepsake(canvas, { big, segs = [], bigLang = 'ko', tilesText = '', photo = null }) {
   const W = 1080, H = 1350;
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
@@ -59,13 +59,21 @@ export function renderKeepsake(canvas, { big, segs = [], bigLang = 'ko', tilesTe
   ctx.font = `60px sans-serif`; ctx.fillText('🌸', cx + 80, cy + 120); ctx.fillText('💖', cx + cw - 80, cy + ch - 50);
   ctx.fillStyle = PINK_D; ctx.font = `800 44px ${FONT_KO}`; ctx.fillText('안녕하세요!', W / 2, cy + 140);
 
+  // 사진(있으면): 카드 가운데 위쪽, 이름·원래 이름은 아래로 내리고 글자 블록은 생략
+  if (photo) {
+    const pw = 600, ph = Math.round(pw * photo.height / photo.width), px = (W - pw) / 2, py = cy + 178;
+    ctx.save(); rr(ctx, px, py, pw, ph, 36); ctx.clip(); ctx.drawImage(photo, px, py, pw, ph); ctx.restore();
+    ctx.lineWidth = 6; ctx.strokeStyle = INK; rr(ctx, px, py, pw, ph, 36); ctx.stroke();
+  }
+  const L = photo ? { name: cy + 760, nameMax: 110, sy: cy + 850, ss: 46, rs: 26 } : { name: cy + 300, nameMax: 150, sy: cy + 520, ss: 58, rs: 30 };
+
   // 큰 이름
   const fam = bigLang === 'ja' ? FONT_JA : FONT_KO;
-  const size = fit(ctx, big, 800, fam, 150, 60, cw - 120);
-  ctx.fillStyle = INK; ctx.font = `800 ${size}px ${fam}`; ctx.fillText(big, W / 2, cy + 300 + size * 0.35);
+  const size = fit(ctx, big, 800, fam, L.nameMax, 50, cw - 120);
+  ctx.fillStyle = INK; ctx.font = `800 ${size}px ${fam}`; ctx.fillText(big, W / 2, L.name + size * 0.35);
 
   // 원래 이름 + 후리가나
-  const sy = cy + 520, ss = 58, rs = 30;
+  const sy = L.sy, ss = L.ss, rs = L.rs;
   ctx.font = `600 ${ss}px ${FONT_JA}`;
   const ws = segs.map(s => ctx.measureText(s.text).width);
   let x = W / 2 - ws.reduce((a, b) => a + b, 0) / 2;
@@ -78,7 +86,7 @@ export function renderKeepsake(canvas, { big, segs = [], bigLang = 'ko', tilesTe
   ctx.textAlign = 'center';
 
   // 한글 블록 타일
-  const chars = [...tilesText].filter(c => /[\uac00-\ud7a3]/.test(c)).slice(0, 8);
+  const chars = photo ? [] : [...tilesText].filter(c => /[\uac00-\ud7a3]/.test(c)).slice(0, 8);
   const tw = 128, th = 150, gap = 18, total = chars.length * tw + (chars.length - 1) * gap;
   let tx = (W - total) / 2; const ty = cy + 610;
   chars.forEach((c, i) => {
