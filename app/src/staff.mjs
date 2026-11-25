@@ -103,7 +103,7 @@ $('connect').onclick = async () => {
     client.on('disconnect', () => { client = null; setP('', '프린터 연결 끊김'); $('connect').textContent = '연결'; });
     await client.connect();
     const meta = client.getModelMetadata();
-    setP('on', `${meta?.model ?? '프린터'} 연결됨`); $('connect').textContent = '끊기';
+    setP('on', `${meta?.model ?? '프린터'} 연결됨 · ${printTaskType()}`); $('connect').textContent = '끊기';
     // 연결된 프린터의 해상도·헤드 폭에 맞춰 라벨을 다시 그린다
     if (meta?.dpi && meta?.printheadPixels) {
       printer = { name: meta.model, dpi: meta.dpi, headPx: meta.printheadPixels };
@@ -114,6 +114,22 @@ $('connect').onclick = async () => {
   } catch (e) { client = null; setP('', '연결 실패'); log('connect error ' + e); toast('연결 실패: ' + e.message); }
 };
 
+// 인쇄 방식(print task): B1 Pro는 D110M_V4 순서로 보내야 한다. 프린터 정보를 못 읽으면 예전엔 'B1' 순서로 보냈다
+//   → B1 Pro가 한 장 인쇄에 용지를 2장분 넘기는 원인 후보. 자동 판별이 안 되면 모델로 정하고, 스태프가 직접 고를 수도 있다
+const TASK_KEY = 'nl-print-task';
+function printTaskType() {
+  const sel = localStorage.getItem(TASK_KEY) || 'auto';
+  if (sel !== 'auto') return sel;
+  const meta = client?.getModelMetadata?.();
+  const model = meta?.model ?? $('model').value;
+  if (model === 'B1_PRO') return 'D110M_V4';
+  return client?.getPrintTaskType?.() ?? 'B1';
+}
+{
+  const ts = $('taskSel');
+  ts.value = localStorage.getItem(TASK_KEY) || 'auto';
+  ts.onchange = () => { localStorage.setItem(TASK_KEY, ts.value); toast(`인쇄 방식: ${ts.options[ts.selectedIndex].text}`); };
+}
 async function printLabel(canvas = $('label'), { test = false } = {}) {
   if (!client) { toast('먼저 프린터를 연결하세요'); return false; }
   if (printing) return false;
@@ -122,8 +138,11 @@ async function printLabel(canvas = $('label'), { test = false } = {}) {
   // 사진을 회색조로 그렸으면 회색조 인쇄, 아니면 흑백 인쇄
   const color = !test && current?.photo && photoMode === 'gray' ? NB.PageColorType.Grayscale : NB.PageColorType.SingleColor;
   const encoded = NB.ImageEncoder.encodeCanvas(canvas, color, meta?.printDirection ?? 'top');
-  const task = client.protocol.newPrintTask(client.getPrintTaskType() ?? 'B1', {
+  const taskType = printTaskType();
+  log(`print task=${taskType} (auto=${client.getPrintTaskType() ?? '-'}) model=${meta?.model ?? '-'} proto=${client.getPrinterInfo?.()?.protocolVersion ?? '-'} rows=${encoded.rows} cols=${encoded.cols}`);
+  const task = client.protocol.newPrintTask(taskType, {
     totalPages: 1, statusPollIntervalMs: 100, statusTimeoutMs: 8000, pageColor: color, density: Number($('density').value),
+    labelType: NB.LabelType?.WithGaps ?? 1,   // 틈 있는 라벨 (다이컷 롤)
   });
   try {
     await task.printInit(); await task.printPage(encoded, 1);
