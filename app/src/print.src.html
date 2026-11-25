@@ -75,6 +75,10 @@
     <details class="adj" id="adjBox" style="margin-top:10px">
       <summary style="font-size:14px;font-weight:700">📐 인쇄 위치 보정 <span id="adjSum" style="font-weight:400;color:#8a7b86"></span></summary>
       <div class="row" style="margin-top:8px">
+        <span style="font-size:13px;width:52px">길이</span>
+        <button data-adj="len" data-d="-0.5">－ 짧게</button><b id="adjLen" style="min-width:64px;text-align:center"></b><button data-adj="len" data-d="0.5">＋ 길게</button>
+      </div>
+      <div class="row" style="margin-top:6px">
         <span style="font-size:13px;width:52px">위아래</span>
         <button data-adj="dy" data-d="-0.5">▲ 위로</button><b id="adjDy" style="min-width:64px;text-align:center"></b><button data-adj="dy" data-d="0.5">▼ 아래로</button>
       </div>
@@ -89,7 +93,7 @@
       <div class="row" style="margin-top:8px">
         <button id="calibBtn">🎯 보정용 테스트 인쇄</button><button id="adjReset">기본값</button>
       </div>
-      <div class="meta-title">위 여백이 크고 아래가 잘리면 「▲ 위로」, 위·아래가 다 빠듯하면 「－ 작게」. 0.5mm씩 움직여요.</div>
+      <div class="meta-title">용지가 2장씩 나오면 「길이 － 짧게」(그림이 라벨보다 길면 프린터가 다음 라벨까지 넘겨요). 위 여백이 크면 「▲ 위로」, 아래가 잘리면 「－ 짧게」. 0.5mm씩 움직여요.</div>
     </details>
     <div class="meta-title" id="multiNote">B1 Pro는 iPhone 최대 3대까지 동시에 연결할 수 있어요. 같은 순간에 두 대가 인쇄하지 않도록 해 주세요.</div>
     <div class="warn" id="btWarn" hidden>이 브라우저는 블루투스를 지원하지 않아요. iPhone에서는 <b>Bluefy</b> 앱으로 이 페이지를 여세요. (스캔·미리보기·PNG 저장은 지금도 됩니다)</div>

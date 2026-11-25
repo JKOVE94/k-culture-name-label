@@ -17,14 +17,19 @@ export const LABEL_SIZES = {
   '50x30': { name: '50×30 이름표', mm: [50, 30], base: [LABEL_W, LABEL_H] },
 };
 export const DEFAULT_SIZE = '54x80';
-// 인쇄 위치 보정 (실물 인쇄 기준). dy: 아래(+)/위(-) mm, dx: 오른쪽(+)/왼쪽(-) mm, scale: 크기 %
-// B1 Pro + 54×80 실측(2026-11-25): 위 여백이 크고 아래 테두리가 용지 끝에 걸림 → 1.5mm 올리고 98%로
-export const DEFAULT_ADJUST = { '54x80': { dy: -1.5, dx: 0, scale: 98 }, '50x80': { dy: -1.5, dx: 0, scale: 98 }, '50x30': { dy: 0, dx: 0, scale: 100 } };
+// 인쇄 보정 (실물 인쇄 기준). len: 프린터에 보내는 그림 길이 mm, dy: 아래(+)/위(-) mm, dx: 오른쪽(+)/왼쪽(-) mm, scale: 크기 %
+// B1 Pro + 54×80 실측(2026-11-25): 그림을 라벨 길이(80mm)만큼 보내면 프린터가 늦게 찍기 시작한 만큼 끝이
+// 라벨 사이 틈을 넘어가 → 용지를 2장분 내보내고, 위 여백이 커진다. 공식 앱처럼 그림을 라벨보다 짧게(76mm) 보낸다.
+export const DEFAULT_ADJUST = {
+  '54x80': { len: 76, dy: 0, dx: 0, scale: 100 },
+  '50x80': { len: 76, dy: 0, dx: 0, scale: 100 },
+  '50x30': { len: 28, dy: 0, dx: 0, scale: 100 },
+};
 // 기준 좌표(BW×BH)를 라벨 픽셀(w×h)에 놓는 배율·위치
 function placement(printer, size, adjust) {
   const spec = LABEL_SIZES[size] ?? LABEL_SIZES[DEFAULT_SIZE];
-  const { w, h } = labelPixels(printer, spec.mm);
-  const a = { ...(DEFAULT_ADJUST[size] ?? { dy: 0, dx: 0, scale: 100 }), ...(adjust || {}) };
+  const a = { len: spec.mm[1], dy: 0, dx: 0, scale: 100, ...(DEFAULT_ADJUST[size] ?? {}), ...(adjust || {}) };
+  const { w, h } = labelPixels(printer, [spec.mm[0], Math.min(spec.mm[1], a.len)]);
   const [BW, BH] = spec.base;
   const pxmm = printer.dpi / 25.4;
   const s = Math.min(w / BW, h / BH) * (a.scale / 100);
@@ -203,7 +208,7 @@ export function renderCalibration(canvas, printer = PRINTERS.B1_PRO, size = DEFA
   ctx.font = `800 ${Math.round(34 * w / 567)}px ${FONT_KO}`; ctx.fillText('위 ▲', w / 2, y0 + 70 * w / 567);
   ctx.fillText('아래 ▼', w / 2, y1 - 40 * w / 567);
   ctx.font = `700 ${Math.round(22 * w / 567)}px ${FONT_KO}`;
-  ctx.fillText(`위아래 ${a.dy >= 0 ? '+' : ''}${a.dy}mm · 좌우 ${a.dx >= 0 ? '+' : ''}${a.dx}mm · 크기 ${a.scale}%`, w / 2, h / 2 + 80 * w / 567);
+  ctx.fillText(`길이 ${a.len}mm · 위아래 ${a.dy >= 0 ? '+' : ''}${a.dy}mm · 좌우 ${a.dx >= 0 ? '+' : ''}${a.dx}mm · ${a.scale}%`, w / 2, h / 2 + 80 * w / 567);
   ctx.fillText('바깥 사각형이 용지 안에 다 들어오고', w / 2, h / 2 + 130 * w / 567);
   ctx.fillText('위·아래 여백이 같으면 OK', w / 2, h / 2 + 162 * w / 567);
   return canvas;

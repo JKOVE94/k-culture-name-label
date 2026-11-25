@@ -12,7 +12,7 @@ function fillTplOptions(c) {
   tp.value = ''; tplOverride = '';
 }
 // 인쇄 위치 보정 (라벨 크기별로 이 폰에 기억)
-const getAdjust = () => ({ ...(DEFAULT_ADJUST[labelSize] ?? { dy: 0, dx: 0, scale: 100 }), ...JSON.parse(localStorage.getItem('nl-adjust-' + labelSize) || '{}') });
+const getAdjust = () => ({ len: LABEL_SIZES[labelSize].mm[1], dy: 0, dx: 0, scale: 100, ...(DEFAULT_ADJUST[labelSize] ?? {}), ...JSON.parse(localStorage.getItem('nl-adjust2-' + labelSize) || '{}') });
 const renderLabel = (canvas, data, prn) => drawLabel(canvas, { ...data, tpl: tplOverride || data.tpl }, prn, labelSize, photoMode, getAdjust());
 let printer = PRINTERS.B1_PRO;
 import { decodePayload } from '../payload.mjs';
@@ -43,17 +43,21 @@ function showAdjust() {
   document.getElementById('adjDy').textContent = mm(a.dy);
   document.getElementById('adjDx').textContent = mm(a.dx);
   document.getElementById('adjScale').textContent = `${a.scale}%`;
-  document.getElementById('adjSum').textContent = `위아래 ${mm(a.dy)} · 좌우 ${mm(a.dx)} · ${a.scale}%`;
+  document.getElementById('adjLen').textContent = `${a.len.toFixed(1)}mm`;
+  document.getElementById('adjSum').textContent = `길이 ${a.len}mm · 위아래 ${mm(a.dy)} · 좌우 ${mm(a.dx)} · ${a.scale}%`;
 }
 document.getElementById('adjBox').onclick = e => {
   const b = e.target.closest('button[data-adj]'); if (!b) return;
   const a = getAdjust(), k = b.dataset.adj, d = Number(b.dataset.d);
-  a[k] = k === 'scale' ? Math.max(85, Math.min(105, a[k] + d)) : Math.max(-6, Math.min(6, Math.round((a[k] + d) * 10) / 10));
-  localStorage.setItem('nl-adjust-' + labelSize, JSON.stringify(a)); showAdjust();
+  const full = LABEL_SIZES[labelSize].mm[1];
+  a[k] = k === 'scale' ? Math.max(85, Math.min(105, a[k] + d))
+    : k === 'len' ? Math.max(full - 12, Math.min(full, Math.round((a[k] + d) * 10) / 10))
+    : Math.max(-6, Math.min(6, Math.round((a[k] + d) * 10) / 10));
+  localStorage.setItem('nl-adjust2-' + labelSize, JSON.stringify(a)); showAdjust();
   if (current) renderLabel(document.getElementById('label'), current, printer);
 };
 document.getElementById('adjReset').onclick = () => {
-  localStorage.removeItem('nl-adjust-' + labelSize); showAdjust();
+  localStorage.removeItem('nl-adjust2-' + labelSize); showAdjust();
   if (current) renderLabel(document.getElementById('label'), current, printer);
 };
 showAdjust();
