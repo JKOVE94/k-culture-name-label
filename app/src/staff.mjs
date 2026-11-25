@@ -1,4 +1,4 @@
-import { renderLabel as drawLabel, PRINTERS, LABEL_SIZES, DEFAULT_SIZE, TEMPLATES, PHOTO_CASES, templatesFor, caseOf } from '../label.mjs';
+import { renderLabel as drawLabel, renderCalibration, PRINTERS, LABEL_SIZES, DEFAULT_SIZE, DEFAULT_ADJUST, TEMPLATES, PHOTO_CASES, templatesFor, caseOf } from '../label.mjs';
 // 라벨 크기: 50×80 포토카드(기본) / 50×30 이름표. 고른 값은 이 폰에 기억한다
 let labelSize = localStorage.getItem('nl-label-size') || DEFAULT_SIZE;
 if (!LABEL_SIZES[labelSize]) labelSize = DEFAULT_SIZE;
@@ -11,7 +11,9 @@ function fillTplOptions(c) {
   tp.innerHTML = `<option value="">디자인: 방문자 선택 (${PHOTO_CASES[c].ko})</option>` + templatesFor(c).map(k => `<option value="${k}">디자인: ${TEMPLATES[k].ko}</option>`).join('');
   tp.value = ''; tplOverride = '';
 }
-const renderLabel = (canvas, data, prn) => drawLabel(canvas, { ...data, tpl: tplOverride || data.tpl }, prn, labelSize, photoMode);
+// 인쇄 위치 보정 (라벨 크기별로 이 폰에 기억)
+const getAdjust = () => ({ ...(DEFAULT_ADJUST[labelSize] ?? { dy: 0, dx: 0, scale: 100 }), ...JSON.parse(localStorage.getItem('nl-adjust-' + labelSize) || '{}') });
+const renderLabel = (canvas, data, prn) => drawLabel(canvas, { ...data, tpl: tplOverride || data.tpl }, prn, labelSize, photoMode, getAdjust());
 let printer = PRINTERS.B1_PRO;
 import { decodePayload } from '../payload.mjs';
 import { toFile, toQrChunks } from '../stats-core.mjs';
@@ -28,7 +30,7 @@ document.getElementById('model').onchange = e => { printer = PRINTERS[e.target.v
   const sel = document.getElementById('labelSize');
   sel.innerHTML = Object.entries(LABEL_SIZES).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
   sel.value = labelSize;
-  sel.onchange = () => { labelSize = sel.value; localStorage.setItem('nl-label-size', labelSize); if (current) renderLabel(document.getElementById('label'), current, printer); };
+  sel.onchange = () => { labelSize = sel.value; localStorage.setItem('nl-label-size', labelSize); showAdjust(); if (current) renderLabel(document.getElementById('label'), current, printer); };
   const tp = document.getElementById('tplSel');
   fillTplOptions('none');
   tp.onchange = () => { tplOverride = tp.value; if (current) renderLabel(document.getElementById('label'), current, printer); };
@@ -36,6 +38,25 @@ document.getElementById('model').onchange = e => { printer = PRINTERS[e.target.v
   pm.value = photoMode;
   pm.onchange = () => { photoMode = pm.value; localStorage.setItem('nl-photo-mode', photoMode); if (current) renderLabel(document.getElementById('label'), current, printer); };
 }
+function showAdjust() {
+  const a = getAdjust(), mm = v => `${v > 0 ? '+' : ''}${v.toFixed(1)}mm`;
+  document.getElementById('adjDy').textContent = mm(a.dy);
+  document.getElementById('adjDx').textContent = mm(a.dx);
+  document.getElementById('adjScale').textContent = `${a.scale}%`;
+  document.getElementById('adjSum').textContent = `위아래 ${mm(a.dy)} · 좌우 ${mm(a.dx)} · ${a.scale}%`;
+}
+document.getElementById('adjBox').onclick = e => {
+  const b = e.target.closest('button[data-adj]'); if (!b) return;
+  const a = getAdjust(), k = b.dataset.adj, d = Number(b.dataset.d);
+  a[k] = k === 'scale' ? Math.max(85, Math.min(105, a[k] + d)) : Math.max(-6, Math.min(6, Math.round((a[k] + d) * 10) / 10));
+  localStorage.setItem('nl-adjust-' + labelSize, JSON.stringify(a)); showAdjust();
+  if (current) renderLabel(document.getElementById('label'), current, printer);
+};
+document.getElementById('adjReset').onclick = () => {
+  localStorage.removeItem('nl-adjust-' + labelSize); showAdjust();
+  if (current) renderLabel(document.getElementById('label'), current, printer);
+};
+showAdjust();
 const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 1800); };
 
 // ── 인쇄 기록 (이 폰 안에 저장 → 파일·QR로 내보내기 / Supabase 자동 업로드) ──
@@ -89,21 +110,23 @@ $('connect').onclick = async () => {
   } catch (e) { client = null; setP('', '연결 실패'); log('connect error ' + e); toast('연결 실패: ' + e.message); }
 };
 
-async function printLabel() {
+async function printLabel(canvas = $('label'), { test = false } = {}) {
   if (!client) { toast('먼저 프린터를 연결하세요'); return false; }
   if (printing) return false;
   printing = true; $('printBtn').disabled = true; $('printBtn').textContent = '인쇄 중…';
   const meta = client.getModelMetadata();
   // 사진을 회색조로 그렸으면 회색조 인쇄, 아니면 흑백 인쇄
-  const color = current?.photo && photoMode === 'gray' ? NB.PageColorType.Grayscale : NB.PageColorType.SingleColor;
-  const encoded = NB.ImageEncoder.encodeCanvas($('label'), color, meta?.printDirection ?? 'top');
+  const color = !test && current?.photo && photoMode === 'gray' ? NB.PageColorType.Grayscale : NB.PageColorType.SingleColor;
+  const encoded = NB.ImageEncoder.encodeCanvas(canvas, color, meta?.printDirection ?? 'top');
   const task = client.protocol.newPrintTask(client.getPrintTaskType() ?? 'B1', {
     totalPages: 1, statusPollIntervalMs: 100, statusTimeoutMs: 8000, pageColor: color, density: Number($('density').value),
   });
   try {
     await task.printInit(); await task.printPage(encoded, 1);
     await task.waitForPageFinished(); await task.waitForFinished();
-    record(); toast('인쇄 완료 ✅'); return true;
+    if (test) toast('테스트 인쇄 완료 · 바깥 사각형 위치를 보고 조정하세요');
+    else { record(); toast('인쇄 완료 ✅'); }
+    return true;
   } catch (e) { log('print error ' + e); toast('인쇄 실패: ' + e.message); return false; }
   finally { await task.printEnd().catch(() => {}); printing = false; $('printBtn').disabled = false; $('printBtn').textContent = '인쇄하기'; }
 }
@@ -236,6 +259,7 @@ function stopScan() {
 }
 
 $('printBtn').onclick = () => printLabel();
+$('calibBtn').onclick = () => printLabel(renderCalibration(document.createElement('canvas'), printer, labelSize, getAdjust()), { test: true });
 $('pngBtn').onclick = () => { const a = document.createElement('a'); a.href = $('label').toDataURL('image/png'); a.download = 'label.png'; a.click(); };
 $('clearBtn').onclick = () => { finalize(); current = null; $('labelCard').hidden = true; window.scrollTo({ top: 0, behavior: 'smooth' }); };
 // 시험용: ?frames=파일주소 로 열면 그 파일의 줄들을 QR처럼 처리 (사진 QR 흐름 확인)

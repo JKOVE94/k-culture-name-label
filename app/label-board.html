@@ -41,7 +41,7 @@ kinds.forEach(([kind, photo, label], r) => {
     g.fillText(q.get('lang') === 'ja' ? TEMPLATES[t].kr : TEMPLATES[t].ko, x, y + ch + 26);
   });
 });
-if (q.get('save')) b.toBlob(blob => fetch('/' + q.get('save'), { method: 'POST', body: blob }).then(() => { document.title = 'saved'; }));
+if (q.get('save')) b.toBlob(blob => fetch('./' + q.get('save'), { method: 'POST', body: blob }).then(() => { document.title = 'saved'; }));
 else document.title = 'ready';
 </script>
 </body></html>

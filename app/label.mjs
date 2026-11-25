@@ -17,6 +17,19 @@ export const LABEL_SIZES = {
   '50x30': { name: '50×30 이름표', mm: [50, 30], base: [LABEL_W, LABEL_H] },
 };
 export const DEFAULT_SIZE = '54x80';
+// 인쇄 위치 보정 (실물 인쇄 기준). dy: 아래(+)/위(-) mm, dx: 오른쪽(+)/왼쪽(-) mm, scale: 크기 %
+// B1 Pro + 54×80 실측(2026-11-25): 위 여백이 크고 아래 테두리가 용지 끝에 걸림 → 1.5mm 올리고 98%로
+export const DEFAULT_ADJUST = { '54x80': { dy: -1.5, dx: 0, scale: 98 }, '50x80': { dy: -1.5, dx: 0, scale: 98 }, '50x30': { dy: 0, dx: 0, scale: 100 } };
+// 기준 좌표(BW×BH)를 라벨 픽셀(w×h)에 놓는 배율·위치
+function placement(printer, size, adjust) {
+  const spec = LABEL_SIZES[size] ?? LABEL_SIZES[DEFAULT_SIZE];
+  const { w, h } = labelPixels(printer, spec.mm);
+  const a = { ...(DEFAULT_ADJUST[size] ?? { dy: 0, dx: 0, scale: 100 }), ...(adjust || {}) };
+  const [BW, BH] = spec.base;
+  const pxmm = printer.dpi / 25.4;
+  const s = Math.min(w / BW, h / BH) * (a.scale / 100);
+  return { w, h, BW, BH, s, ox: (w - BW * s) / 2 + a.dx * pxmm, oy: (h - BH * s) / 2 + a.dy * pxmm, pxmm, a };
+}
 
 // ── 포토카드 템플릿 (한국 전통 모티프, 흑백 감열지용) ──
 // 사진 케이스별로 3종씩, 모두 9종. 방문자는 자기 케이스의 3종 중에서 고른다
@@ -131,16 +144,13 @@ function fitFont(ctx, text, family, max, min, width) {
  * data.photo: 사진(Image/ImageBitmap/Canvas). 있으면 사진형 포카로 그린다.
  * photoMode: 'gray'면 사진 부분만 16단계 회색으로 남긴다 → 인쇄 시 PageColorType.Grayscale 필요
  */
-export function renderLabel(canvas, data, printer = PRINTERS.B1_PRO, size = DEFAULT_SIZE, photoMode = 'dither') {
-  const spec = LABEL_SIZES[size] ?? LABEL_SIZES[DEFAULT_SIZE];
-  const { w, h } = labelPixels(printer, spec.mm);
+export function renderLabel(canvas, data, printer = PRINTERS.B1_PRO, size = DEFAULT_SIZE, photoMode = 'dither', adjust = null) {
+  const { w, h, s, ox, oy } = placement(printer, size, adjust);
   canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d');
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
-  const [BW, BH] = spec.base;
-  const s = Math.min(w / BW, h / BH);
-  ctx.setTransform(s, 0, 0, s, (w - BW * s) / 2, (h - BH * s) / 2);
+  ctx.setTransform(s, 0, 0, s, ox, oy);
   ctx.fillStyle = '#000'; ctx.strokeStyle = '#000';
   let box = null;
   if (size === '50x30') drawCompact(ctx, data);
@@ -155,7 +165,6 @@ export function renderLabel(canvas, data, printer = PRINTERS.B1_PRO, size = DEFA
   toMono(ctx, w, h);
   if (box && data.photo) {
     // 사진 칸은 글자와 따로 처리한다 (글자는 선명한 흑백, 사진은 회색조 또는 디더링)
-    const ox = (w - BW * s) / 2, oy = (h - BH * s) / 2;
     const bx = Math.round(ox + box.x * s), by = Math.round(oy + box.y * s);
     const bw = Math.round(box.w * s), bh = Math.round(box.h * s);
     drawPhotoRegion(ctx, data.photo, bx, by, bw, bh, photoMode);
@@ -164,6 +173,39 @@ export function renderLabel(canvas, data, printer = PRINTERS.B1_PRO, size = DEFA
     ctx.fillRect(bx - lw, by - lw, bw + lw * 2, lw); ctx.fillRect(bx - lw, by + bh, bw + lw * 2, lw);
     ctx.fillRect(bx - lw, by, lw, bh); ctx.fillRect(bx + bw, by, lw, bh);
   }
+  return canvas;
+}
+
+// 보정용 테스트 인쇄: 라벨 테두리(카드 바깥선)와 1mm 눈금. 위·아래 눈금이 같은 만큼 보이면 맞은 것
+export function renderCalibration(canvas, printer = PRINTERS.B1_PRO, size = DEFAULT_SIZE, adjust = null) {
+  const { w, h, BW, BH, s, ox, oy, pxmm, a } = placement(printer, size, adjust);
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = '#000';
+  // 카드 바깥선 (템플릿 테두리 위치)
+  const x0 = Math.round(ox), y0 = Math.round(oy), x1 = Math.round(ox + BW * s), y1 = Math.round(oy + BH * s);
+  ctx.fillRect(x0, y0, x1 - x0, 3); ctx.fillRect(x0, y1 - 3, x1 - x0, 3); ctx.fillRect(x0, y0, 3, y1 - y0); ctx.fillRect(x1 - 3, y0, 3, y1 - y0);
+  // 용지 쪽으로 나가는 1mm 눈금 (위·아래·왼쪽·오른쪽). 5mm마다 길게
+  for (let i = 1; i <= 6; i++) {
+    const L = i % 5 === 0 ? 40 : 22;
+    for (const cx of [w * 0.3, w * 0.7]) {
+      ctx.fillRect(cx - L / 2, y0 - i * pxmm, L, 2);     // 위쪽 (카드 밖)
+      ctx.fillRect(cx - L / 2, y1 + i * pxmm - 2, L, 2); // 아래쪽
+    }
+    ctx.fillRect(x0 - i * pxmm, h * 0.5 - L / 2, 2, L); ctx.fillRect(x1 + i * pxmm - 2, h * 0.5 - L / 2, 2, L);
+  }
+  // 캔버스 맨 끝 (프린터에 보낸 그림의 끝) 점선
+  for (let x = 0; x < w; x += 16) { ctx.fillRect(x, 0, 8, 2); ctx.fillRect(x, h - 2, 8, 2); }
+  // 가운데 십자 + 안내
+  ctx.fillRect(w / 2 - 30, h / 2 - 1, 60, 3); ctx.fillRect(w / 2 - 1, h / 2 - 30, 3, 60);
+  ctx.textAlign = 'center';
+  ctx.font = `800 ${Math.round(34 * w / 567)}px ${FONT_KO}`; ctx.fillText('위 ▲', w / 2, y0 + 70 * w / 567);
+  ctx.fillText('아래 ▼', w / 2, y1 - 40 * w / 567);
+  ctx.font = `700 ${Math.round(22 * w / 567)}px ${FONT_KO}`;
+  ctx.fillText(`위아래 ${a.dy >= 0 ? '+' : ''}${a.dy}mm · 좌우 ${a.dx >= 0 ? '+' : ''}${a.dx}mm · 크기 ${a.scale}%`, w / 2, h / 2 + 80 * w / 567);
+  ctx.fillText('바깥 사각형이 용지 안에 다 들어오고', w / 2, h / 2 + 130 * w / 567);
+  ctx.fillText('위·아래 여백이 같으면 OK', w / 2, h / 2 + 162 * w / 567);
   return canvas;
 }
 
